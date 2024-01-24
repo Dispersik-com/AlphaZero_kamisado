@@ -1,12 +1,57 @@
 import numpy as np
 
+
 class Monk:
-    def __init__(self, command_color, self_color):
+    def __init__(self, command_color: str, self_color: str):
         self.command_color = command_color
         self.self_color = self_color
 
     def __str__(self):
         return f"{self.command_color[0]}-{self.self_color}"
+
+    def __repr__(self) -> str:
+        return f"{self.command_color[0]}-{self.self_color}"
+
+def kth_diagonals_indices(matrix, cell):
+    row, col = cell
+
+    # Calculate the diagonal index (k) of the given cell
+    k = col - row
+
+    # Get the indices of the main diagonal of the matrix
+    first_rowidx, first_colidx = np.diag_indices_from(matrix)
+    first_colidx = first_colidx.copy()
+
+    # Create a secondary diagonal using a pre-defined array
+    arr = np.array([(i, 7-i) for i in range(8)])
+    second_rowidx, second_colidx = arr[:, 0].T, arr[:, 1].T
+
+    # auxiliary values
+    offset = matrix.shape[0] - 1 - row - col
+    # offset of list first diagonal (OLFD)
+    olfd = np.abs(k)
+
+    # Adjust indices based on the diagonal direction (k > 0 or k <= 0)
+    if k == 0:
+      first_rowidx -= k
+      second_colidx -= offset
+      olfd = - matrix.shape[0] - 1
+    elif k > 0:
+        first_colidx += k
+        second_rowidx -= offset
+    else:
+        first_rowidx -= k
+        second_colidx += offset
+
+    # zipping col and row, excluding the last k elements
+    indices = list(zip(first_rowidx[:-olfd], first_colidx[:-olfd]))
+
+    # zipping col and row, filtering out out-of-bounds indices
+    second_indices = list(zip(second_rowidx[:], second_colidx[:]))
+    filter_rows = lambda row: all(0 <= element <= 7 for element in row)
+    second_indices = list(filter(filter_rows, second_indices))
+
+    return indices, second_indices
 
 
 class KamisadoEnvironment:
@@ -35,13 +80,15 @@ class KamisadoEnvironment:
         7: "O"   # Orange
     }
 
+
     def __init__(self):
-        # Initializing the game board with None (empty spaces)
-        self.game_board = np.full((8, 8), None)
+        # Initializing the game board with 0 (empty spaces)
+        self.game_board = np.zeros((8, 8), dtype=Monk)
         self.current_player = "White"
         self.last_move = None
         # Initializing the monks on the board
         self.init_monk()
+
 
     def init_monk(self):
         # Initializing the initial distribution of monks
@@ -60,60 +107,25 @@ class KamisadoEnvironment:
                     print(f"E-{cell_color} ", end="")
             print()
 
-    def make_move(self, start_cell, end_cell):
-
-        start_row, start_col, end_row, end_col = start_cell, end_cell
-
-        # Checking if the move is valid
-        if not self.is_valid_move(start_row, start_col, end_row, end_col):
-            print("Invalid move!")
-            return
-
-        # Moving the monk to the new position
-        self.game_board[end_row][end_col] = self.game_board[start_row][start_col]
-        self.game_board[start_row][start_col] = None
-
-        # init tuple of last move
-        self.last_move = ((end_row, end_col), self.color_board[end_row][end_col])
-
+    def switch_player(self):
         # Switching the current player for the next turn
-        self.switch_player()
+        self.current_player = "Black" if self.current_player == "White" else "White"
 
-    def _get_diagonals_by_cell(self, row, col):
-
+    def _get_diagonals_by_cell(self, cell):
+        row, col = cell
         matrix = self.game_board
 
-        diagonal_indices, diagonal_objects = None, None
-        offset_by_object = matrix.shape[1] - 1 - col - row
+        first_diag, second_diag = kth_diagonals_indices(matrix, cell)
 
-        if self.current_player == "Black":
+        # object_on_first_diag = [self.game_board[i][j] for i, j in first_diag]
+        # object_on_second_diag = [self.game_board[i][j] for i, j in second_diag]
 
-          main_diagonal = matrix.diagonal(col - row)[col+1:]
-          secound_diagonal = matrix[:, ::-1].diagonal(offset_by_object)[offset_by_object+1:]
+        return first_diag, second_diag
 
-          diagonal_objects = main_diagonal, secound_diagonal
 
-          main_indices = [(row+i+1, col+i+1)for i in range(len(main_diagonal))]
-          secound_indices = [(row+i, col-i-1)for i in range(len(secound_diagonal))]
+    def _get_sright_line_by_cell(self, cell):
+        row, col = cell
 
-          diagonal_indices = main_indices, secound_indices
-
-        else:
-
-          main_diagonal = matrix.diagonal(col - row)[:col]
-          secound_diagonal = matrix[:, ::-1].diagonal(offset_by_object)[:offset_by_object]
-
-          diagonal_objects = main_diagonal, secound_diagonal
-
-          main_indices = [(row-i-1, col-i-1)for i in range(len(main_diagonal))]
-          secound_indices = [(row-i, col+i+1)for i in range(len(secound_diagonal))]
-
-          diagonal_indices = main_indices, secound_indices
-
-        return diagonal_indices, diagonal_objects
-
-    def _get_sright_line_by_cell(self, row, col):
-        
         if self.current_player == "Black":
           stright_line_objects = self.game_board[:,col].T[row:]
           steps = len(stright_line_objects)
@@ -124,44 +136,18 @@ class KamisadoEnvironment:
 
         return stright_line_indices, stright_line_objects
 
+
     def get_legal_moves(self):
         if self.last_move is not None:
           cell, _ = self.last_move
-          giagonals = self._get_diagonals_by_cell(cell)
-          stright_line = self._get_stright_by_cell(cell)
-          return giagonals, stright_line
+          diagonals = self._get_diagonals_by_cell(cell)
+          stright_line = self._get_sright_line_by_cell(cell)
+          # TODO: add this function
+          return 
         else:
-          indices = np.argwhere(self.game_board[1:])
-          coordinates = [(i[0] + 1, i[1]) for i in indices]
-          return coordinates
+          indices = np.ndenumerate(self.game_board)
+          return list(map(lambda x: x[0], list(indices)))[8:56]
 
-    def is_valid_move(self, start_row, start_col, end_row, end_col):
-        # Check if the move is within the boundaries of the board
-        if not (0 <= start_row < 8 and 0 <= start_col < 8 and 0 <= end_row < 8 and 0 <= end_col < 8):
-            return False
-
-        # Get the monk at the starting position
-        monk = self.game_board[start_row][start_col]
-
-        # Check if there is a monk at the starting position and if it belongs to the current player
-        if monk is None or monk.command_color != self.current_player:
-            return False
-
-        # Check if the destination position is empty
-        if not (0 <= end_row < 8 and 0 <= end_col < 8 and self.game_board[end_row][end_col] is None):
-            return False
-
-        # Check for the correct direction of movement based on the current player
-        if self.current_player == "White" and end_row >= start_row:
-            return False
-        elif self.current_player == "Black" and end_row <= start_row:
-            return False
-
-        # Check for movement on cells of the same color
-        if not self.is_valid_color_move(start_row, start_col, end_row, end_col):
-            return False
-
-        return True
 
     def is_valid_color_move(self, start_row, start_col, end_row, end_col):
         if self.last_move is None:
@@ -172,9 +158,63 @@ class KamisadoEnvironment:
         # Check if the monk is moving on cells of the same color
         return monk_color == last_cell_color
 
-    def switch_player(self):
+
+    def is_valid_move(self, start_cell, end_cell):
+
+        start_row, start_col = start_cell
+        end_row, end_col = end_cell
+
+        # Get the monk at the starting position
+        monk = self.game_board[start_row][start_col]
+
+        # Check if there is a monk at the starting position and if it belongs to the current player
+        if monk == 0 or monk.command_color != self.current_player:
+            return False
+
+        giagonals = self.get_legal_moves()
+        # legal_moves = giagonals[0][0] + stright_line[0][0]
+
+        # print(legal_moves)
+
+        # if (end_row, end_col) not in legal_moves:
+        #     return False
+
+        # Check for movement on cells of the same color
+        if not self.is_valid_color_move(start_row, start_col, end_row, end_col):
+            return False
+
+        return True
+
+
+    def make_move(self, start_cell, end_cell):
+
+        # Checking if the move is valid
+        if not self.is_valid_move(start_cell, end_cell):
+            print("Invalid move!")
+            return False
+
+        start_row, start_col = start_cell
+        end_row, end_col = end_cell
+
+        # Moving the monk to the new position
+        self.game_board[end_row][end_col] = self.game_board[start_row][start_col]
+        self.game_board[start_row][start_col] = 0
+
+        # init tuple of last move
+        self.last_move = ((end_row, end_col), self.color_board[end_row][end_col])
+
         # Switching the current player for the next turn
-        self.current_player = "Black" if self.current_player == "White" else "White"
+        self.switch_player()
+
+
+    def find_monk(self, command_color, self_color):
+        for i, row in enumerate(self.game_board):
+          for j, monk in enumerate(row):
+              print(monk)
+              if monk.command_color == command_color and monk.self_color == self_color:
+                return i, j
+        return None
+
 
     def check_winner(self):
         # Check if any player has reached the opposite end and declare the winner
@@ -187,19 +227,3 @@ class KamisadoEnvironment:
                 return "White"
         return None
 
-
-    # def play_game(self):
-    #     while True:
-    #         self.print_board()
-
-    #         start_row = int(input(f"{self.current_player}'s turn. Enter start row (0-7): "))
-    #         start_col = int(input("Enter start column (0-7): "))
-    #         end_row = int(input("Enter end row (0-7): "))
-    #         end_col = int(input("Enter end column (0-7): "))
-
-    #         self.make_move(start_row, start_col, end_row, end_col)
-
-    #         winner = self.check_winner()
-    #         if winner:
-    #             print(f"{winner} player wins!")
-    #             break
