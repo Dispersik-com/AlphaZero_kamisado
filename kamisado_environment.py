@@ -12,46 +12,24 @@ class Monk:
     def __repr__(self) -> str:
         return f"{self.command_color[0]}-{self.self_color}"
 
+
 def kth_diagonals_indices(matrix, cell):
-    row, col = cell
+    right_diagonal = []
+    left_diagonal = []
 
-    # Calculate the diagonal index (k) of the given cell
-    k = col - row
+    i, j = cell
 
-    # Get the indices of the main diagonal of the matrix
-    first_rowidx, first_colidx = np.diag_indices_from(matrix)
-    first_colidx = first_colidx.copy()
+    # Check diagonal
+    right_diagonal.extend([(i + x, j + x) for x in range(1, 8) if 0 <= i + x < 8 and 0 <= j + x < 8])  # diagonal down-right
+    right_diagonal.extend([(i - x, j + x) for x in range(1, 8) if 0 <= i - x < 8 and 0 <= j + x < 8])  # diagonal up-right
+    left_diagonal.extend([(i + x, j - x) for x in range(1, 8) if 0 <= i + x < 8 and 0 <= j - x < 8])  # diagonal down-left
+    left_diagonal.extend([(i - x, j - x) for x in range(1, 8) if 0 <= i - x < 8 and 0 <= j - x < 8])  # diagonal up-left
 
-    # Create a secondary diagonal using a pre-defined array
-    arr = np.array([(i, 7-i) for i in range(8)])
-    second_rowidx, second_colidx = arr[:, 0].T, arr[:, 1].T
-
-    # auxiliary values
-    offset = matrix.shape[0] - 1 - row - col
-    # offset of list first diagonal (OLFD)
-    olfd = np.abs(k)
-
-    # Adjust indices based on the diagonal direction (k > 0 or k <= 0)
-    if k == 0:
-      first_rowidx -= k
-      second_colidx -= offset
-      olfd = - matrix.shape[0] - 1
-    elif k > 0:
-        first_colidx += k
-        second_rowidx -= offset
-    else:
-        first_rowidx -= k
-        second_colidx += offset
-
-    # zipping col and row, excluding the last k elements
-    indices = list(zip(first_rowidx[:-olfd], first_colidx[:-olfd]))
-
-    # zipping col and row, filtering out out-of-bounds indices
-    second_indices = list(zip(second_rowidx[:], second_colidx[:]))
-    filter_rows = lambda row: all(0 <= element <= 7 for element in row)
-    second_indices = list(filter(filter_rows, second_indices))
-
-    return indices, second_indices
+    # Filter out moves outside the board
+    right_diagonal = [(x, y) for (x, y) in right_diagonal if 0 <= x < 8 and 0 <= y < 8]
+    left_diagonal = [(x, y) for (x, y) in left_diagonal if 0 <= x < 8 and 0 <= y < 8]
+    
+    return right_diagonal, left_diagonal
 
 
 class KamisadoEnvironment:
@@ -226,4 +204,3 @@ class KamisadoEnvironment:
                 print("White player wins!")
                 return "White"
         return None
-
