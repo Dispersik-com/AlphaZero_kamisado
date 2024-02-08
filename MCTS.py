@@ -1,7 +1,10 @@
 import math
 import random
+from collections import deque
+
 import numpy as np
-from kamisado_environment import KamisadoEnvironment
+import json
+
 
 class MCTSNode:
     def __init__(self, state, parent=None, action=None):
@@ -243,3 +246,63 @@ class MonteCarloTreeSearch:
         best_child = max(root.children, key=lambda child: child.value)
 
         return best_child.action
+
+    def to_dict(self):
+        """
+        Convert the MCTS tree rooted at the given node to a dictionary using BFS.
+
+        Args:
+            node: The root node of the tree.
+
+        Returns:
+            A dictionary representation of the MCTS tree.
+        """
+        if self.root.children is None:
+            return None
+
+        tree_data = {}
+        queue = deque(self.root.children)
+
+        while queue:
+            current_node = queue.popleft()
+            children_data = [child for child in current_node.children]
+            tree_data[str(hash(current_node.state))] = {
+                'state': str(current_node.state.game_board.tolist()),
+                'parent': str(hash(current_node.parent.state)),
+                'action': current_node.action,
+                'children': list(map(lambda x: str(hash(x.state)), children_data)),
+                'visits': current_node.visits,
+                'value': current_node.value,
+                # 'untried_actions': current_node.untried_actions
+            }
+
+            queue.extend(current_node.children)
+
+        return tree_data
+
+    def save_tree(self, filename, indent=3):
+        """
+        Save the entire MCTS tree to a file using BFS-based serialization.
+
+        Args:
+            filename: The name of the file to save the tree.
+        """
+        tree_data = self.to_dict()
+
+        # tree_data = convert_keys(tree_data)
+        with open(filename, 'w') as file:
+            json.dump(tree_data, file, indent=indent)
+
+    def load_tree(self, filename):
+        """
+        Load the MCTS tree from a file.
+
+        Args:
+            filename: The name of the file containing the tree.
+
+        Returns:
+            The dictionary representation of the loaded MCTS tree.
+        """
+        with open(filename, 'r') as file:
+            tree_data = json.load(file)
+        return tree_data
