@@ -65,6 +65,8 @@ class KamisadoEnvironment:
         self.game_board = np.zeros((8, 8), dtype=Monk)
         self.current_player = "White"
         self.last_move = None
+        self.winner = None
+        self.history_of_moves = []
         # Initializing the monks on the board
         self.init_monk()
 
@@ -217,6 +219,13 @@ class KamisadoEnvironment:
         color_of_last_cell = self.color_dict[self.color_board[end_row][end_col]]
         self.last_move = ((end_row, end_col), color_of_last_cell)
 
+        # write history of moves
+        self.history_of_moves.append({"last move": self.last_move,
+                                  "start cell": start_cell,
+                                  "end cell": end_cell,
+                                  "piece": str(self.game_board[end_row][end_col]),
+                                  "player": self.current_player
+                                      })
         # Switching the current player for the next turn
         self.switch_player()
 
@@ -244,9 +253,7 @@ class KamisadoEnvironment:
         # Check if any player has reached the opposite end and declare the winner
         for i in range(8):
             if self.game_board[7][i] and self.game_board[7][i].command_color == "Black":
-                print("Black player wins!")
-                return "Black"
+                self.winner = "Black"
             if self.game_board[0][i] and self.game_board[0][i].command_color == "White":
-                print("White player wins!")
-                return "White"
+                self.winner = "White"
         return None
