@@ -67,28 +67,34 @@ class MCTSNode:
         Returns:
             The created child node.
         """
-        # Select an untried action
-        action = self.untried_actions.pop()
-        
+        if action is None:
+            # If no specific action is provided for expanding the node:
+
+            # Check if the node is fully expanded (all possible actions are available)
+            if self.is_fully_expanded():
+                # selected_child = random.choice(self.children)
+                selected_child = self.select_child()
+                return selected_child
+
+            # Get a list of legal actions that can be applied to the current node
+            legal_moves_by_piece = self.get_legal_actions()
+
+            # Choose one of the untried actions that has not been used in this node yet
+            action = list(set(self.untried_actions) & set(legal_moves_by_piece)).pop()
+            # Remove the chosen action from the list of untried actions
+            self.untried_actions.pop(self.untried_actions.index(action))
+
         # Perform the action in a copy of the current state to create a new state
         new_state = self.state.copy_and_apply_action(action)
-        child = MCTSNode(new_state, parent=self, action=action)
-        self.children.append(child)
-        return child
-    
-    def get_child_by_action(self, action):
-        """
-        Get the child node corresponding to the specified action.
+        child_node = MCTSNode(new_state, parent=self, action=action)
 
-        Args:
-            action: The action for which to get the child node.
+        # Check for duplicates among the child nodes by states
+        new_state = child_node.state
+        if any(hash(child.state) == hash(new_state) for child in self.children):
+            return child_node
 
-        Returns:
-            The child node corresponding to the specified action, or None if not found.
-        """
-        for child in self.children:
-            if child.action == action:
-                return child
+        self.children.append(child_node)
+        return child_node
 
     def backpropagation(self, reward):
         """
