@@ -60,7 +60,6 @@ class KamisadoEnvironment:
         7: "O"   # Orange
     }
 
-
     def __init__(self):
         # Initializing the game board with 0 (empty spaces)
         self.game_board = np.zeros((8, 8), dtype=Monk)
