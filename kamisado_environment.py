@@ -14,7 +14,7 @@ class Monk:
         return f"{self.command_color[0]}-{self.self_color}"
 
 
-def kth_diagonals_indices(matrix, cell):
+def kth_diagonals_indices(cell):
     right_diagonal = []
     left_diagonal = []
 
@@ -86,7 +86,7 @@ class KamisadoEnvironment:
                     monk = self.game_board[i][j]
                     print(f"{monk} ", end="")
                 else:
-                    print(f"E-{cell_color} ", end="")
+                    print(f"e-{cell_color} ", end="")
             print()
 
     def switch_player(self):
@@ -94,11 +94,9 @@ class KamisadoEnvironment:
         self.current_player = "Black" if self.current_player == "White" else "White"
 
     def _get_diagonals_by_cell(self, cell):
-        row, col = cell
-        matrix = self.game_board  # Get the game board matrix
 
         # Calculate the indices of the two diagonals using the provided function
-        first_diag, second_diag = kth_diagonals_indices(matrix, cell)
+        first_diag, second_diag = kth_diagonals_indices(cell)
 
         # Define a filtering function based on the current player
         if self.current_player == "Black":
@@ -116,7 +114,6 @@ class KamisadoEnvironment:
         # Return the filtered diagonals and the objects on them
         return (first_diag, second_diag), (object_on_first_diag, object_on_second_diag)
 
-
     def _get_sright_line_by_cell(self, cell):
         row, col = cell
 
@@ -125,7 +122,7 @@ class KamisadoEnvironment:
             # For Black player, get the objects and indices below the current cell
             stright_line_objects = self.game_board[:, col].T[row + 1:]
             steps = len(stright_line_objects)
-            stright_line_indices = list(enumerate([col] * steps, row + 1))[row:]
+            stright_line_indices = list(enumerate([col] * steps, row + 1))
         else:
             # For White player, get the objects and indices above the current cell
             stright_line_objects = self.game_board[:, col].T[:row][::-1]
@@ -134,12 +131,11 @@ class KamisadoEnvironment:
         # Return the calculated straight line indices and objects
         return stright_line_indices, stright_line_objects
 
-
     def get_legal_moves(self):
         if self.last_move is not None:
             _, monk_color = self.last_move
             # Find the cell coordinates of the monk with the specified color
-            cell = self.find_monk(self.current_player, monk_color)
+            cell = self.find_monk(monk_color)
 
             # Get diagonals and objects on diagonals from the current cell
             diagonals, object_on_diag = self._get_diagonals_by_cell(cell)
@@ -168,8 +164,7 @@ class KamisadoEnvironment:
             indices = np.ndenumerate(self.game_board)
             return list(map(lambda x: x[0], list(indices)))[8:56]
 
-
-    def is_valid_color_move(self, start_row, start_col, end_row, end_col):
+    def is_valid_color_move(self, start_row, start_col):
         if self.last_move is None:
           return True
 
@@ -178,7 +173,6 @@ class KamisadoEnvironment:
 
         # Check if the monk is moving on cells of the same color
         return monk_color == last_cell_color
-
 
     def is_valid_move(self, start_cell, end_cell):
 
@@ -199,12 +193,11 @@ class KamisadoEnvironment:
             print('not in legal moves')
             return False
 
-        if not self.is_valid_color_move(start_row, start_col, end_row, end_col):
+        if not self.is_valid_color_move(start_row, start_col):
             print("invalid color of monk")
             return False
 
         return True
-
 
     def make_move(self, start_cell, end_cell):
 
@@ -221,22 +214,20 @@ class KamisadoEnvironment:
         self.game_board[start_row][start_col] = 0
 
         # init tuple of last move
-        color_of_last_monk = self.color_dict[self.color_board[end_row][end_col]]
-        self.last_move = ((end_row, end_col), color_of_last_monk)
+        color_of_last_cell = self.color_dict[self.color_board[end_row][end_col]]
+        self.last_move = ((end_row, end_col), color_of_last_cell)
 
         # Switching the current player for the next turn
         self.switch_player()
 
-
-    def find_monk(self, command_color, self_color):
+    def find_monk(self, color_monk):
         # Iterate through the game board to find the coordinates of a monk with the specified colors
         for i, row in enumerate(self.game_board):
             for j, monk in enumerate(row):
                 if isinstance(monk, int):
                     continue
-                if monk.command_color == command_color and monk.self_color == self_color:
+                if monk.command_color == self.current_player and monk.self_color == color_monk:
                     return i, j
-        return None
 
     def copy_and_apply_action(self, action):
         start_cell, end_cell = action
