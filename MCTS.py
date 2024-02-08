@@ -22,7 +22,6 @@ class MCTSNode:
         """
         return self.state.get_legal_moves()
 
-
     def is_fully_expanded(self):
         """
         Check if all possible actions have corresponding child nodes.
@@ -32,8 +31,7 @@ class MCTSNode:
         """
         return not bool(self.untried_actions)
 
-
-    def select_child(self, exploration_weight, strategy="UCB1"):
+    def select_child(self, exploration_weight=1.0, strategy="UCB1"):
         """
         Select a child node based on a selection strategy (e.g., UCB1).
 
@@ -45,7 +43,7 @@ class MCTSNode:
         """
 
         if not self.children:
-            return None
+            return self
 
         if strategy == "UCB1":
             selection_function = lambda child: child.value / child.visits + exploration_weight * math.sqrt(math.log(self.visits) / child.visits)
@@ -62,7 +60,7 @@ class MCTSNode:
 
         return selected_child
     
-    def expand(self):
+    def expand(self, action=None):
         """
         Expand the node by adding a child with an untried action.
 
@@ -92,9 +90,7 @@ class MCTSNode:
             if child.action == action:
                 return child
 
-        return None
-
-    def backpropagate(self, reward):
+    def backpropagation(self, reward):
         """
         Update the node's visit count and value based on the result of a simulation.
 
@@ -104,7 +100,7 @@ class MCTSNode:
         self.visits += 1
         self.value += reward
         if self.parent:
-            self.parent.backpropagate(reward)
+            self.parent.backpropagation(reward)
 
     def is_terminal(self):
         """
@@ -113,11 +109,11 @@ class MCTSNode:
         Returns:
             True if terminal, False otherwise.
         """
-        winner = self.state.check_winner()
+        self.state.check_winner()
+        has_action = bool(len(self.get_legal_actions()) != 0)
 
-        return winner is not None
-    
-    
+        return self.state.winner is not None and has_action
+
     def is_winner(self, player):
         """
         Check if the current state is a winning state for the specified player.
@@ -128,32 +124,25 @@ class MCTSNode:
         Returns:
             True if winning, False otherwise.
         """
-        winner = self.state.check_winner()
-        if winner:
-            return winner == player
-        else:
-            return False
+        self.state.check_winner()
+
+        return self.state.winner == player
 
 
 class MonteCarloTreeSearch:
-    def __init__(self, game, policy_network, value_network, exploration_weight=1.0):
+    def __init__(self, game, exploration_weight=1.0):
         """
         Initialize the Monte Carlo Tree Search.
 
         Args:
             game: The game environment.
-            policy_network: The neural network for policy estimation.
-            value_network: The neural network for value estimation.
             exploration_weight: The weight for exploration in the selection strategy.
         """
         self.game = game
-        self.policy_network = policy_network
-        self.value_network = value_network
         self.exploration_weight = exploration_weight
-        self.root = None  # root of MCTS
+        self.root = MCTSNode(self.game)  # root of MCTS
 
-
-    def search(self, num_simulations):
+    def search(self, num_simulations, random_first_piece=True):
         """
         Perform Monte Carlo Tree Search.
 
@@ -163,7 +152,15 @@ class MonteCarloTreeSearch:
         Returns:
             The selected action.
         """
-        for _ in range(num_simulations):
+
+        for i in range(num_simulations):
+
+            if random_first_piece:
+                self.root.state.set_first_piece()
+            else:
+                piece_color = self.game.color_dict[i]
+                self.root.state.set_first_piece(piece_color)
+
             # step 1: select
             selected_node = self.select(self.root)
 
@@ -173,14 +170,14 @@ class MonteCarloTreeSearch:
 
                 # step 3: simulation
                 simulation_result = self.simulate(expanded_node)
+                last_node, reward = simulation_result
 
-                # step 4: backpropagate
-                expanded_node.backpropagate(simulation_result)
+                # step 4: backpropagation
+                last_node.backpropagation(reward)
 
         # select the best action based on root statistics
         best_action = self.get_best_action(self.root)
         return best_action
-
 
     def simulate(self, node):
         """
@@ -195,20 +192,22 @@ class MonteCarloTreeSearch:
         current_node = node
 
         while not current_node.is_terminal():
-          legal_actions = current_node.state.get_legal_actions()
-          if not legal_actions:
-                break
+            legal_actions = current_node.get_legal_actions()
 
-          action = random.choice(legal_actions)
-          current_node = current_node.get_child_by_action(action)
+            if not legal_actions:
+                if not current_node.state.pass_move():
+                    break
+                continue
+
+            action = random.choice(legal_actions)
+            current_node = current_node.expand(action=action)
 
         if current_node.is_winner("Black"):
-            return 1.0  # Rewards if the Black win
+            print("Black player wins")
+            return current_node, 1.0  # Rewards if the Black win
         elif current_node.is_winner("White"):
-            return -1.0  # Rewards if the White win
-        else:
-            return 0.0 # Rewards if the game ends in a draw or is still ongoing
-
+            print("White player wins")
+            return current_node, -1.0  # Rewards if the White win
 
     def select(self, node):
         """
@@ -221,7 +220,6 @@ class MonteCarloTreeSearch:
             The selected child node.
         """
         return node.select_child(self.exploration_weight)
-
 
     def get_best_action(self, root):
         """
