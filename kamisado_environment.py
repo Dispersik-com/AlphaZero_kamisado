@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import copy
 
@@ -239,15 +240,53 @@ class KamisadoEnvironment:
                     return i, j
 
     def copy_and_apply_action(self, action):
-        start_cell, end_cell = action
+        end_cell = action
+
+        if self.last_move is None:
+            self.set_first_piece()
+
+        start_cell = self.find_monk(self.last_move[1])
 
         # Create a deep copy of the current state
         new_state = copy.deepcopy(self)
-        
         # Perform the action in the copied state to create a new state
         new_state.make_move(start_cell, end_cell)
-        
+
         return new_state
+
+    def set_first_piece(self, color=None):
+        """
+        Set the piece that should move first.
+
+        Args:
+            color (str): Optional. The color of the piece that should move first.
+                         If not provided, a random color is chosen from available colors.
+        """
+        if color is None:
+            color = random.choice(list(self.color_dict.values()))
+        cell = self.find_monk(color)
+        self.last_move = (cell, color)
+
+    def pass_move(self):
+        """
+        Pass the move to the next player.
+
+        Returns:
+            bool: True if the move is successfully passed, False otherwise.
+
+        # According to Kamisado rules, if both players have no moves,
+        # then the player who created the stalemate loses
+        """
+        color = self.last_move[1]
+        row, col = self.find_monk(color)
+        new_color = self.color_dict[self.color_board[row][col]]
+        self.last_move = ((row, col), new_color)
+        self.switch_player()
+
+        if not self.get_legal_moves():
+            self.winner = self.current_player
+            return False
+        return True
 
     def check_winner(self):
         # Check if any player has reached the opposite end and declare the winner
