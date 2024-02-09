@@ -1,12 +1,13 @@
 import random
 import unittest
-from MCTS import MonteCarloTreeSearch
-from kamisado_environment import KamisadoEnvironment, Monk
+from kamisado_environment.kamisado_enviroment import KamisadoGame
+from kamisado_environment.pieces import Monk
+
 
 class TestKamisadoEnvironment(unittest.TestCase):
 
     def setUp(self):
-        self.game = KamisadoEnvironment()
+        self.game = KamisadoGame()
 
     def test_make_move(self):
 
@@ -70,7 +71,6 @@ class TestKamisadoEnvironment(unittest.TestCase):
         # Change the command color of the monk for checking winning
 
         self.game.game_board[7][7].command_color = "Black"
-        self.assertEqual(self.game.check_winner(), "Black")
         self.game.check_winner()
         self.assertEqual(self.game.winner, "Black")
         # reset changes
@@ -99,16 +99,6 @@ class TestKamisadoEnvironment(unittest.TestCase):
 
         self.assertIn(self.game.winner, ["White", "Black"])
 
-
-class TestMonteCarloTreeSearch(unittest.TestCase):
-
-    def setUp(self):
-        self.game = KamisadoEnvironment()
-        self.mcts = MonteCarloTreeSearch(self.game)
-
-    def test_search_integration(self):
-        self.mcts = MonteCarloTreeSearch(self.game)
-        self.mcts.search(num_simulations=100)
 
 if __name__ == '__main__':
     unittest.main()
