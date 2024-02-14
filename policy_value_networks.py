@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
+from torch import optim
+import torch.nn.functional as F
 
 
 class PolicyNet(nn.Module):
@@ -13,7 +14,7 @@ class PolicyNet(nn.Module):
         fc1: First fully connected layer.
         fc2: Second fully connected layer.
     """
-    def __init__(self):
+    def __init__(self, learning_rate=0.001):
         """
         Initializes the PolicyNet model.
         """
@@ -23,24 +24,74 @@ class PolicyNet(nn.Module):
         self.fc1 = nn.Linear(64 * 8 * 8, 256)
         self.fc2 = nn.Linear(256, 64)
 
-    def forward(self, x):
+        self.learning_rate = learning_rate
+
+        # set labels for output
+        size = 8
+        self.action_labels = [(x // size, x % size) for x in range(size*size)]
+
+    def forward(self, x, legal_moves=None):
         """
         Forward pass of the PolicyNet model.
 
         Args:
             x: Input tensor.
+            legal_moves: A list of legal moves. If None, all moves are considered legal.
 
         Returns:
             policy: Output tensor representing the policy.
         """
+        if legal_moves is None:
+            legal_moves = self.action_labels
+
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
         x = x.view(-1, 64 * 8 * 8)
         x = torch.relu(self.fc1(x))
         policy = self.fc2(x)  # without applying softmax
-        return policy
 
-    def softmax_by_legal_moves(self, outputs, mask):
+        # apply mask and softmax by legal moves
+        mask = self.create_mask(legal_moves)
+        policy_by_legal_moves = self.softmax_by_legal_moves(policy, mask)
+        return policy_by_legal_moves
+
+    def update(self, output, target, reward: int):
+        """
+        Update the parameters of the policy network using an optimizer.
+
+        Args:
+            reward: reward of moves
+            output: The output of the policy network.
+            target: The target labels for the output.
+            learning_rate: The learning rate for the optimizer.
+
+        Returns:
+            None
+        """
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        loss = F.cross_entropy(output, target) * reward
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+
+    def create_mask(self, valid_actions):
+        """
+            Create a mask to restrict probabilities to legal actions.
+
+            Args:
+                valid_actions: List of valid action indices.
+
+            Returns:
+                mask: Tensor mask indicating valid actions.
+            """
+        indices_valid_actions = [i for i, x in enumerate(self.action_labels) if x in valid_actions]
+        mask = torch.zeros(len(self.action_labels))
+        mask[indices_valid_actions] = 1
+        return mask
+
+    @staticmethod
+    def softmax_by_legal_moves(outputs, mask):
         """
         Applies softmax function to the outputs considering only legal moves.
 
@@ -95,9 +146,20 @@ class ValueNet(nn.Module):
         value = torch.tanh(self.fc2(x))  # output for state value, in range [-1, 1]
         return value
 
+    def update(self, output, reward: int, learning_rate=0.001):
+        """
+        Update the parameters of the value network using an optimizer.
 
+        Args:
+            reward: reward of moves
+            output: The output of the value network.
+            learning_rate: The learning rate for the optimizer.
 
-# policy_criterion = nn.CrossEntropyLoss()
-# value_criterion = nn.MSELoss()
-# policy_optimizer = optim.Adam(policy_net.parameters(), lr=0.001)
-# value_optimizer = optim.Adam(value_net.parameters(), lr=0.001)
+        Returns:
+            None
+        """
+        optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        loss = F.mse_loss(output, reward)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
