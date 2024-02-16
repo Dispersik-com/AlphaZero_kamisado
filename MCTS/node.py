@@ -98,18 +98,6 @@ class MCTSNode:
         self.children.append(child_node)
         return child_node
 
-    def backpropagation(self, reward):
-        """
-        Update the node's visit count and value based on the result of a simulation.
-
-        Args:
-            reward: The reward of the simulation.
-        """
-        self.visits += 1
-        self.value += reward
-        if self.parent:
-            self.parent.backpropagation(reward)
-
     def is_terminal(self):
         """
         Check if the current state is a terminal state.

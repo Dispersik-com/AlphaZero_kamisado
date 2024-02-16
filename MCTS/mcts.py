@@ -50,7 +50,7 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
                 last_node, reward = simulation_result
 
                 # step 4: backpropagation
-                last_node.backpropagation(reward)
+                self.backpropagation(last_node, reward)
 
         # select the best action based on root statistics
         best_action = self.get_best_action(self.root)
@@ -97,6 +97,19 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
             The selected child node.
         """
         return node.select_child(self.exploration_weight)
+
+    def backpropagation(self, node, reward):
+        """
+        Update the node's visit count and value based on the result of a simulation.
+
+        Args:
+            node:
+            reward: The reward of the simulation.
+        """
+        node.visits += 1
+        node.value += reward
+        if node.parent:
+            node.parent.backpropagation(reward)
 
     @staticmethod
     def get_best_action(root):
