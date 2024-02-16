@@ -108,6 +108,25 @@ class PolicyNet(nn.Module):
         masked_outputs = torch.softmax(masked_outputs, dim=0)
         return masked_outputs
 
+    def get_one_hot_target(self, target: tuple):
+        """
+        Generates a one-hot representation for a given target action.
+
+        Args:
+            target (tuple): A tuple representing the coordinates of the target action.
+
+        Returns:
+            torch.Tensor: A one-dimensional tensor representing the one-hot encoding of the target action.
+        """
+        num_classes = len(self.action_labels)
+
+        one_hot_label = torch.zeros(num_classes)
+        action_index = self.action_labels.index(target)
+
+        one_hot_label[action_index] = 1.
+
+        return one_hot_label.view(1, 64)
+
 
 class ValueNet(nn.Module):
     """
