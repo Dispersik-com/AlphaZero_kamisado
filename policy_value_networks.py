@@ -64,7 +64,6 @@ class PolicyNet(nn.Module):
             reward: reward of moves
             output: The output of the policy network.
             target: The target labels for the output.
-            learning_rate: The learning rate for the optimizer.
 
         Returns:
             None
@@ -167,20 +166,19 @@ class ValueNet(nn.Module):
         value = torch.tanh(self.fc2(x))  # output for state value, in range [-1, 1]
         return value
 
-    def update(self, output, reward: float, learning_rate=0.001):
+    def update(self, output, reward: float):
         """
         Update the parameters of the value network using an optimizer.
 
         Args:
             reward: reward of moves
             output: The output of the value network.
-            learning_rate: The learning rate for the optimizer.
 
         Returns:
             None
         """
         reward = torch.tensor([reward]).view(1, 1)
-        optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         loss = F.mse_loss(output, reward)
         optimizer.zero_grad()
         loss.backward()

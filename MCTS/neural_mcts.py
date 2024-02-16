@@ -50,6 +50,27 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         # Return the state value as a reward
         return current_node, value
 
+    def backpropagation(self, node, reward):
+        """
+        Update the node's visit count and value based on the result of a simulation.
+
+        Args:
+            node:
+            reward: The reward of the simulation.
+        """
+        node.visits += 1
+        node.value += reward
+
+        # Update the value network
+        input_data = self.convert_node_to_input(node)
+        self.value_network.update(input_data, reward)
+
+        # Update the policy network
+        self.policy_network.update(input_data, node.action, reward)
+
+        if node.parent:
+            node.parent.backpropagation(reward)
+
     @staticmethod
     def convert_node_to_input(node):
         """
@@ -74,6 +95,6 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
                     state[i][j] = piece_to_idx[str(cell)]
 
         # create tensor
-        tensor = torch.tensor(state, dtype=torch.float32)
+        tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True)
 
         return tensor
