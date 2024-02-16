@@ -44,6 +44,7 @@ class PolicyNet(nn.Module):
         if legal_moves is None:
             legal_moves = self.action_labels
 
+        x = x.view(1, 1, 8, 8)
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
         x = x.view(-1, 64 * 8 * 8)
@@ -55,7 +56,7 @@ class PolicyNet(nn.Module):
         policy_by_legal_moves = self.softmax_by_legal_moves(policy, mask)
         return policy_by_legal_moves
 
-    def update(self, output, target, reward: int):
+    def update(self, output, target, reward: float):
         """
         Update the parameters of the policy network using an optimizer.
 
@@ -68,12 +69,12 @@ class PolicyNet(nn.Module):
         Returns:
             None
         """
+        one_hot_target = self.get_one_hot_target(target)
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        loss = F.cross_entropy(output, target) * reward
+        loss = F.cross_entropy(output, one_hot_target) * reward
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
 
     def create_mask(self, valid_actions):
         """
@@ -158,6 +159,7 @@ class ValueNet(nn.Module):
         Returns:
             value: Output tensor representing the estimated value of the state.
         """
+        x = x.view(1, 1, 8, 8)
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
         x = x.view(-1, 64 * 8 * 8)
@@ -165,7 +167,7 @@ class ValueNet(nn.Module):
         value = torch.tanh(self.fc2(x))  # output for state value, in range [-1, 1]
         return value
 
-    def update(self, output, reward: int, learning_rate=0.001):
+    def update(self, output, reward: float, learning_rate=0.001):
         """
         Update the parameters of the value network using an optimizer.
 
@@ -177,6 +179,7 @@ class ValueNet(nn.Module):
         Returns:
             None
         """
+        reward = torch.tensor([reward]).view(1, 1)
         optimizer = optim.Adam(self.parameters(), lr=learning_rate)
         loss = F.mse_loss(output, reward)
         optimizer.zero_grad()
