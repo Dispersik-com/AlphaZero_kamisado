@@ -5,7 +5,7 @@ from MCTS.tree_serializer import TreeSerializationMixin
 
 class MonteCarloTreeSearch(TreeSerializationMixin):
 
-    def __init__(self, game, exploration_weight=1.0):
+    def __init__(self, game, player="Black", exploration_weight=1.0):
         """
         Initialize the Monte Carlo Tree Search.
 
@@ -15,7 +15,13 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
         """
         self.game = game
         self.exploration_weight = exploration_weight
-        self.root = MCTSNode(self.game)  # root of MCTS
+        self.root = MCTSNode(self.game, is_root=True)  # root of MCTS
+        self.reward_by_player = 1.0 if player == "Black" else -1.0
+
+    def update_root(self, new_root):
+        self.root = new_root
+        self.root.parent = None
+        self.root.is_root = True
 
     def search(self, num_simulations, random_first_piece=True):
         """
@@ -32,11 +38,14 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         for i in range(num_simulations):
 
-            if random_first_piece:
-                self.root.state.set_first_piece()
-            else:
-                piece_color = self.game.color_dict[i]
-                self.root.state.set_first_piece(piece_color)
+            if self.root.state.last_move is None:
+                if random_first_piece:
+                    self.root.state.set_first_piece()
+                else:
+                    piece_color = self.game.color_dict[i]
+                    self.root.state.set_first_piece(piece_color)
+
+                self.root.action = self.root.state.last_move[0]
 
             # step 1: select
             selected_node = self.select(self.root)
@@ -54,6 +63,7 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         # select the best action based on root statistics
         best_action = self.get_best_action(self.root)
+
         return best_action
 
     def simulate(self, node):
@@ -81,10 +91,10 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         if current_node.is_winner("Black"):
             print("Black player wins")
-            return current_node, 1.0  # Rewards if the Black win
+            return current_node, 1.0 * self.reward_by_player # Rewards if the Black win
         elif current_node.is_winner("White"):
             print("White player wins")
-            return current_node, -1.0  # Rewards if the White win
+            return current_node, -1.0 * self.reward_by_player  # Rewards if the White win
 
     def select(self, node):
         """
@@ -109,7 +119,7 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
         node.visits += 1
         node.value += reward
         if node.parent:
-            node.parent.backpropagation(reward)
+            self.backpropagation(node.parent, reward)
 
     @staticmethod
     def get_best_action(root):
@@ -127,4 +137,4 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         best_child = max(root.children, key=lambda child: child.value)
 
-        return best_child.action
+        return best_child

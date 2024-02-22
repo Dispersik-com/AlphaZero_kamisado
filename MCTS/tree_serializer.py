@@ -1,8 +1,8 @@
 from collections import deque
 import numpy as np
 import json
-from kamisado_environment.kamisado_enviroment import KamisadoGame
-from kamisado_environment.pieces import Monk
+from game_environment.kamisado_enviroment import KamisadoGame
+from game_environment.pieces import Monk
 
 
 class TreeSerializationMixin:
@@ -24,14 +24,15 @@ class TreeSerializationMixin:
             return None
 
         tree_data = {}
-        queue = deque(self.root.children)
+        queue = deque([self.root])
 
         while queue:
+
             current_node = queue.popleft()
             children_data = [child for child in current_node.children]
             tree_data[str(hash(current_node.state))] = {
                 'state': array_to_str_list(current_node.state.game_board),
-                'parent': str(hash(current_node.parent.state)),
+                'parent': str(hash(current_node.parent.state)) if current_node.parent is not None else '0',
                 'action': current_node.action,
                 'children': list(map(lambda x: str(hash(x.state)), children_data)),
                 'visits': current_node.visits,

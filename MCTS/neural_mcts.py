@@ -1,14 +1,20 @@
+import copy
+
 import torch
 
 from MCTS.mcts import MonteCarloTreeSearch
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
-    def __init__(self, game, policy_network, value_network, exploration_weight=1.0):
-        super().__init__(game, exploration_weight)
+    def __init__(self, game, policy_network, value_network, player="Black", exploration_weight=1.0):
+        super().__init__(game, player=player,
+                         exploration_weight=exploration_weight)
         # add policy and value networks
         self.policy_network = policy_network
         self.value_network = value_network
+
+        self.current_reward = 0
+        self.losses = {"policy_losses": [], "value_losses": []}
 
     def simulate(self, node):
         """
@@ -35,17 +41,29 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             input_data = self.convert_node_to_input(current_node)
 
             # get move probabilities from the policy_network
-            action_probs = self.policy_network.forward(input_data, legal_actions=legal_actions)
+            action_probs = self.policy_network.forward(input_data)
+
+            # # apply mask by legal moves
+            mask = self.policy_network.create_mask(legal_actions)
+            action_probs_by_legal_moves = action_probs * mask.float()
 
             # choose a move according to the probabilities
-            action_index = torch.multinomial(action_probs, 1).item()
-            selected_action = legal_actions[action_index]
+            action_index = torch.argmax(action_probs_by_legal_moves).item()
+            selected_action = self.policy_network.action_labels[action_index]
 
             current_node = current_node.expand(action=selected_action)
 
         # Evaluate the value of the final state using the value_network
         input_data = self.convert_node_to_input(current_node)
         value = self.value_network.forward(input_data)
+
+        # format reward by player
+        if current_node.is_winner("Black"):
+            self.current_reward = 1.0 * self.reward_by_player
+            print("Black")
+        elif current_node.is_winner("White"):
+            self.current_reward = -1.0 * self.reward_by_player
+            print("White")
 
         # Return the state value as a reward
         return current_node, value
@@ -61,15 +79,24 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         node.visits += 1
         node.value += reward
 
-        # Update the value network
         input_data = self.convert_node_to_input(node)
-        self.value_network.update(input_data, reward)
+
+        # Update the value network
+        loss = self.value_network.update(reward, self.current_reward)
+        self.losses["policy_losses"].append(loss.item())
 
         # Update the policy network
-        self.policy_network.update(input_data, node.action, reward)
+        loss = self.policy_network.update(input_data, node.action, reward)
+        self.losses["value_losses"].append(loss.item())
 
-        if node.parent:
-            node.parent.backpropagation(reward)
+        if node.parent and node.parent.action is not None:
+            self.backpropagation(node.parent, reward)
+
+    def get_losses(self, reset_losses=False):
+        losses = self.losses
+        if reset_losses:
+            self.losses = {"policy_losses": [], "value_losses": []}
+        return losses
 
     @staticmethod
     def convert_node_to_input(node):
@@ -82,19 +109,21 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         Returns:
             Input data for the neural network.
         """
-        state = node.state.geam_board.to_list()
+        state = node.state.game_board.tolist()
 
         piece_to_idx = {'B-O': 0, 'B-A': 1, 'B-V': 2, 'B-P': 3,
                         'B-Y': 4, 'B-R': 5, 'B-G': 6, 'B-B': 7,
                         'W-B': 8, 'W-G': 9, 'W-R': 10, 'W-Y': 11,
                         'W-P': 12, 'W-V': 13, 'W-A': 14, 'W-O': 15}
 
-        for i, row in enumerate(state):
+        state_copy = copy.deepcopy(state)
+
+        for i, row in enumerate(state_copy):
             for j, cell in enumerate(row):
                 if str(cell) in piece_to_idx.keys():
-                    state[i][j] = piece_to_idx[str(cell)]
+                    state_copy[i][j] = piece_to_idx[str(cell)]
 
         # create tensor
-        tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True)
+        tensor = torch.tensor(state_copy, dtype=torch.float32).view(1, 64).clone().detach()
 
         return tensor

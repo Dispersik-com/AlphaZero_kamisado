@@ -2,7 +2,7 @@ import math
 
 
 class MCTSNode:
-    def __init__(self, state, parent=None, action=None):
+    def __init__(self, state, parent=None, action=None, is_root=False):
         self.state = state
         self.parent = parent
         self.action = action
@@ -10,6 +10,7 @@ class MCTSNode:
         self.visits = 0
         self.value = 0.0
         self.untried_actions = self.get_legal_actions()
+        self.is_root = is_root
 
     def get_legal_actions(self):
         """
@@ -44,6 +45,7 @@ class MCTSNode:
 
         if not self.children:
             return self
+
 
         if strategy == "UCB1":
             selection_function = lambda child: child.value / child.visits + exploration_weight * math.sqrt(
