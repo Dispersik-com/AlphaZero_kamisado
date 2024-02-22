@@ -1,7 +1,7 @@
 import unittest
 
 from MCTS.mcts import MonteCarloTreeSearch
-from kamisado_environment.kamisado_enviroment import KamisadoGame
+from game_environment.kamisado_enviroment import KamisadoGame
 from MCTS.node import MCTSNode
 
 
@@ -25,3 +25,8 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
     def test_search_integration(self):
         self.mcts = MonteCarloTreeSearch(self.game)
         self.mcts.search(num_simulations=1000)
+
+    def test_save(self):
+        self.mcts.search(num_simulations=100)
+        self.mcts.save_tree('100_iter.json')
+

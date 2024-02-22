@@ -1,7 +1,7 @@
 import random
 import unittest
-from kamisado_environment.kamisado_enviroment import KamisadoGame
-from kamisado_environment.pieces import Monk
+from game_environment.kamisado_enviroment import KamisadoGame
+from game_environment.pieces import Monk
 
 
 class TestKamisadoEnvironment(unittest.TestCase):

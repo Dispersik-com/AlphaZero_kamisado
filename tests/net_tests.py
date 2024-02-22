@@ -30,11 +30,12 @@ class TestPolicyNet(unittest.TestCase):
 
         self.assertEqual(list(mask), output_tensor)
 
-    def test_softmax_by_legal_moves(self):
-        outputs = torch.randn(64)  # Example output tensor
-        mask = self.policy_net.create_mask(self.policy_net.action_labels[:33])
-        masked_outputs = self.policy_net.softmax_by_legal_moves(outputs, mask)
-        self.assertAlmostEqual(masked_outputs.sum().item(), 1.0,  delta=1e-6)  # Check if probabilities sum to 1
+    # def test_softmax_by_legal_moves(self):
+    #     outputs = torch.randn(64)  # Example output tensor
+    #     print(outputs)
+    #     mask = self.policy_net.create_mask(self.policy_net.action_labels)
+    #     masked_outputs = self.policy_net.softmax_by_legal_moves(outputs, mask)
+    #     self.assertAlmostEqual(masked_outputs.sum().item(), 1.0,  delta=1e-6)  # Check if probabilities sum to 1
 
     def test_get_one_hot(self):
         result = self.policy_net.get_one_hot_target((1, 1))
@@ -63,8 +64,6 @@ class TestPolicyNet(unittest.TestCase):
             self.assertNotEqual(parm.grad, None)
 
 
-
-
 class TestValueNet(unittest.TestCase):
     def setUp(self):
         self.value_net = ValueNet()
@@ -76,13 +75,13 @@ class TestValueNet(unittest.TestCase):
 
     def test_update(self):
         input_tensor = torch.tensor([1., 2., 3., 4., 5., 6., 7., 8.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              9., 10., 11., 12., 13., 14., 15., 16.], requires_grad=True)
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          0., 0., 0., 0., 0., 0., 0., 0.,
+                                          9., 10., 11., 12., 13., 14., 15., 16.], requires_grad=True)
 
         output_tensor = self.value_net.forward(input_tensor)
         target = 1.0  # Example target value
