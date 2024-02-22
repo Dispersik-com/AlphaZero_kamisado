@@ -74,6 +74,17 @@ class KamisadoGame(KamisadoBoard, KamisadoMoveValidator):
 
         return new_state
 
+    def apply_action(self, action):
+        end_cell = action
+
+        if self.last_move is None:
+            self.set_first_piece()
+
+        start_cell = self.find_monk(self.last_move[1])
+
+        # Perform the action in the copied state to create a new state
+        self.make_move(start_cell, end_cell)
+
     def set_first_piece(self, color=None):
         """
         Set the piece that should move first.
@@ -82,6 +93,7 @@ class KamisadoGame(KamisadoBoard, KamisadoMoveValidator):
             color (str): Optional. The color of the piece that should move first.
                          If not provided, a random color is chosen from available colors.
         """
+
         if color is None:
             color = random.choice(list(self.color_dict.values()))
         cell = self.find_monk(color)
