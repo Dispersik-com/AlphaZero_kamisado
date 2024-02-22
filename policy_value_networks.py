@@ -23,38 +23,31 @@ class PolicyNet(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(64 * 8 * 8, 256)
         self.fc2 = nn.Linear(256, 64)
-
         self.learning_rate = learning_rate
 
         # set labels for output
         size = 8
         self.action_labels = [(x // size, x % size) for x in range(size*size)]
 
-    def forward(self, x, legal_moves=None):
+    def forward(self, x):
         """
         Forward pass of the PolicyNet model.
 
         Args:
             x: Input tensor.
-            legal_moves: A list of legal moves. If None, all moves are considered legal.
 
         Returns:
             policy: Output tensor representing the policy.
         """
-        if legal_moves is None:
-            legal_moves = self.action_labels
 
         x = x.view(1, 1, 8, 8)
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
         x = x.view(-1, 64 * 8 * 8)
         x = torch.relu(self.fc1(x))
-        policy = self.fc2(x)  # without applying softmax
+        policy = torch.softmax(self.fc2(x), dim=0)
 
-        # apply mask and softmax by legal moves
-        mask = self.create_mask(legal_moves)
-        policy_by_legal_moves = self.softmax_by_legal_moves(policy, mask)
-        return policy_by_legal_moves
+        return policy
 
     def update(self, output, target, reward: float):
         """
@@ -68,12 +61,15 @@ class PolicyNet(nn.Module):
         Returns:
             None
         """
-        one_hot_target = self.get_one_hot_target(target)
+        one_hot_target = self.get_one_hot_target(target).clone().detach().requires_grad_(True)
+        reward = torch.tensor([reward]).view(1, 1)
+
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         loss = F.cross_entropy(output, one_hot_target) * reward
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        return loss
 
     def create_mask(self, valid_actions):
         """
@@ -89,24 +85,6 @@ class PolicyNet(nn.Module):
         mask = torch.zeros(len(self.action_labels))
         mask[indices_valid_actions] = 1
         return mask
-
-    @staticmethod
-    def softmax_by_legal_moves(outputs, mask):
-        """
-        Applies softmax function to the outputs considering only legal moves.
-
-        Args:
-            outputs: Output tensor from the network.
-            mask: Mask indicating legal moves.
-
-        Returns:
-            masked_outputs: Output tensor with softmax applied only to legal moves.
-        """
-        # Apply the mask to the network outputs
-        masked_outputs = outputs * mask.float()
-        # Apply softmax only to legal moves
-        masked_outputs = torch.softmax(masked_outputs, dim=0)
-        return masked_outputs
 
     def get_one_hot_target(self, target: tuple):
         """
@@ -125,7 +103,9 @@ class PolicyNet(nn.Module):
 
         one_hot_label[action_index] = 1.
 
-        return one_hot_label.view(1, 64)
+        tensor = one_hot_label.view(1, 64).clone().detach()
+
+        return tensor
 
 
 class ValueNet(nn.Module):
@@ -138,7 +118,7 @@ class ValueNet(nn.Module):
         fc1: First fully connected layer.
         fc2: Second fully connected layer.
     """
-    def __init__(self):
+    def __init__(self, learning_rate=0.001):
         """
         Initializes the ValueNet model.
         """
@@ -147,6 +127,8 @@ class ValueNet(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(64 * 8 * 8, 256)
         self.fc2 = nn.Linear(256, 1)    # output for state value
+
+        self.learning_rate=learning_rate
 
     def forward(self, x):
         """
@@ -177,9 +159,13 @@ class ValueNet(nn.Module):
         Returns:
             None
         """
-        reward = torch.tensor([reward]).view(1, 1)
+        reward_tensor = torch.tensor([reward], dtype=torch.float32).view(1, 1)
+        reward_tensor = reward_tensor.clone().detach()
+        output = output.clone().detach().requires_grad_(True)
+
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        loss = F.mse_loss(output, reward)
+        loss = F.mse_loss(output, reward_tensor)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        return loss
