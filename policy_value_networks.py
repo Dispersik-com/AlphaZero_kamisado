@@ -4,7 +4,35 @@ from torch import optim
 import torch.nn.functional as F
 
 
-class PolicyNet(nn.Module):
+class SaveLoadInterface:
+
+    def save_model(self, file_path):
+        """
+        Saves the model parameters to a file.
+
+        Args:
+            file_path (str): The path to the file where the model parameters will be saved.
+        """
+        torch.save(self.state_dict(), file_path)
+
+    @classmethod
+    def load_model(cls, file_path):
+        """
+        Creates a new instance of the model and loads parameters from a file.
+
+        Args:
+            file_path (str): The path to the file from which the model parameters will be loaded.
+
+        Returns:
+            PolicyNet: The loaded model.
+        """
+        model = cls()
+        model.load_state_dict(torch.load(file_path))
+        model.eval()  # Set the model to evaluation mode
+        return model
+
+
+class PolicyNet(nn.Module, SaveLoadInterface):
     """
     A neural network model for policy estimation in a game.
 
@@ -108,7 +136,7 @@ class PolicyNet(nn.Module):
         return tensor
 
 
-class ValueNet(nn.Module):
+class ValueNet(nn.Module, SaveLoadInterface):
     """
     A neural network model for estimating the value of a game state.
 
