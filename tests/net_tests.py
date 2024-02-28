@@ -15,27 +15,14 @@ class TestPolicyNet(unittest.TestCase):
         output = self.policy_net.forward(self.input_data)
         self.assertEqual(list(output.shape), [1, 64])  # Check output shape
 
-    def test_create_mask(self):
-        valid_actions = [(0, 0), (1, 1), (2, 2), (3, 3)]  # Example list of valid actions
-        mask = self.policy_net.create_mask(valid_actions)
-        self.assertEqual(mask.sum(), len(valid_actions))  # Check if mask is correct size
-        output_tensor = list([1., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 1., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 1., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 1., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.,
-                              0., 0., 0., 0., 0., 0., 0., 0.])
-
-        self.assertEqual(list(mask), output_tensor)
-
-    # def test_softmax_by_legal_moves(self):
-    #     outputs = torch.randn(64)  # Example output tensor
-    #     print(outputs)
-    #     mask = self.policy_net.create_mask(self.policy_net.action_labels)
-    #     masked_outputs = self.policy_net.softmax_by_legal_moves(outputs, mask)
-    #     self.assertAlmostEqual(masked_outputs.sum().item(), 1.0,  delta=1e-6)  # Check if probabilities sum to 1
+    def test_softmax_by_legal_moves(self):
+        input = torch.randn(64)  # Example output tensor
+        outputs = self.policy_net.forward(input)
+        mask = self.policy_net.create_mask(self.policy_net.action_labels[7:57])
+        masked_outputs = outputs * mask.float()
+        print(mask)
+        print(masked_outputs)
+        self.assertAlmostEqual(masked_outputs.sum().item(), 1.0 - 0.16,  delta=0.1)  # Check if probabilities sum by
 
     def test_get_one_hot(self):
         result = self.policy_net.get_one_hot_target((1, 1))

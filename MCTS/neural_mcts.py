@@ -6,15 +6,21 @@ from MCTS.mcts import MonteCarloTreeSearch
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
-    def __init__(self, game, policy_network, value_network, player="Black", exploration_weight=1.0):
-        super().__init__(game, player=player,
-                         exploration_weight=exploration_weight)
+    def __init__(self, game, policy_network, value_network, player="Black", update_form_buffer=True, buffer_size=1000):
+        super().__init__(game, player=player)
         # add policy and value networks
         self.policy_network = policy_network
         self.value_network = value_network
 
         self.current_reward = 0
         self.losses = {"policy_losses": [], "value_losses": []}
+        self.update_form_buffer = update_form_buffer
+
+        self.win_rate = {"Black": 0, "White": 0}
+
+        if self.update_form_buffer:
+            self.buffer_size = buffer_size
+            self.buffer = {"states_data": [], "selected_action_data": [], "values_data": []}
 
     def simulate(self, node):
         """
@@ -53,6 +59,12 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
             current_node = current_node.expand(action=selected_action)
 
+            # add data to buffer
+            if self.update_form_buffer:
+                self.buffer["states_data"].append(input_data)
+                self.buffer["selected_action_data"].append(selected_action)
+                self.buffer["values_data"].append(current_node.value)
+
         # Evaluate the value of the final state using the value_network
         input_data = self.convert_node_to_input(current_node)
         value = self.value_network.forward(input_data)
@@ -60,10 +72,10 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         # format reward by player
         if current_node.is_winner("Black"):
             self.current_reward = 1.0 * self.reward_by_player
-            print("Black")
+            self.win_rate["Black"] += 1
         elif current_node.is_winner("White"):
             self.current_reward = -1.0 * self.reward_by_player
-            print("White")
+            self.win_rate["White"] += 1
 
         # Return the state value as a reward
         return current_node, value
@@ -76,18 +88,38 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             node:
             reward: The reward of the simulation.
         """
+        if self.update_form_buffer:
+            if len(self.buffer["states_data"]) > self.buffer_size:
+
+                # Update the value network
+                rewards = tuple([reward] * len(self.buffer["values_data"]))
+
+                loss = self.value_network.batch_update(rewards, self.buffer["values_data"])
+                self.losses["value_losses"].append(loss.item())
+
+                # Update the policy network
+                loss = self.policy_network.batch_update(self.buffer["states_data"],
+                                                        self.buffer["selected_action_data"],
+                                                        self.current_reward)
+                self.losses["policy_losses"].append(loss.item())
+
+                # clean buffer
+                self.buffer = {"states_data": [], "selected_action_data": [], "values_data": []}
+
+        else:
+
+            input_data = self.convert_node_to_input(node)
+
+            # Update the value network
+            loss = self.value_network.update(reward, node.value)
+            self.losses["policy_losses"].append(loss.item())
+
+            # Update the policy network
+            loss = self.policy_network.update(input_data, node.action, node.value)
+            self.losses["value_losses"].append(loss.item())
+
         node.visits += 1
         node.value += reward
-
-        input_data = self.convert_node_to_input(node)
-
-        # Update the value network
-        loss = self.value_network.update(reward, self.current_reward)
-        self.losses["policy_losses"].append(loss.item())
-
-        # Update the policy network
-        loss = self.policy_network.update(input_data, node.action, reward)
-        self.losses["value_losses"].append(loss.item())
 
         if node.parent and node.parent.action is not None:
             self.backpropagation(node.parent, reward)
@@ -127,3 +159,9 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         tensor = torch.tensor(state_copy, dtype=torch.float32).view(1, 64).clone().detach()
 
         return tensor
+
+    def get_win_rate(self):
+        if self.reward_by_player == 1.0:
+            return self.win_rate["Black"] / self.win_rate["White"]
+        else:
+            return self.win_rate["White"] / self.win_rate["Black"]
