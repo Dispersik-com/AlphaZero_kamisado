@@ -73,7 +73,7 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         x = torch.relu(self.conv2(x))
         x = x.view(-1, 64 * 8 * 8)
         x = torch.relu(self.fc1(x))
-        policy = torch.softmax(self.fc2(x), dim=0)
+        policy = torch.softmax(self.fc2(x), dim=1)
 
         return policy
 
@@ -98,6 +98,40 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         loss.backward()
         optimizer.step()
         return loss
+
+    def batch_update(self, outputs, targets, reward: float):
+        """
+            Update the parameters of the policy network using an optimizer.
+
+            Args:
+                reward: List of rewards for moves.
+                outputs: List of outputs of the policy network.
+                targets: List of target labels for the outputs.
+
+            Returns:
+                losses
+            """
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+
+        # Convert lists to tensors
+        outputs_tensor = torch.stack(outputs)
+        rewards_tensor = torch.tensor(reward, dtype=torch.float32).view(-1, 1)
+
+        targets_tensor = []
+        for target in targets:
+            one_hot = self.get_one_hot_target(target).clone().detach().requires_grad_(True)
+            targets_tensor.append(one_hot)
+        one_hot_targets = torch.stack(targets_tensor)
+
+        # Compute loss
+        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) * rewards_tensor)
+
+        # Perform backward pass and optimization step
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+
+        return total_loss
 
     def create_mask(self, valid_actions):
         """
@@ -185,7 +219,7 @@ class ValueNet(nn.Module, SaveLoadInterface):
             output: The output of the value network.
 
         Returns:
-            None
+            lose
         """
         reward_tensor = torch.tensor([reward], dtype=torch.float32).view(1, 1)
         reward_tensor = reward_tensor.clone().detach()
@@ -197,3 +231,31 @@ class ValueNet(nn.Module, SaveLoadInterface):
         loss.backward()
         optimizer.step()
         return loss
+
+    def batch_update(self, outputs, rewards):
+        """
+        Batch update the parameters of the value network using an optimizer.
+
+        Args:
+            outputs: List of outputs of the value network.
+            rewards: List of rewards for moves.
+
+        Returns:
+            losses
+        """
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+
+        # Convert lists to tensors
+        outputs_tensor = torch.stack(outputs)
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).view(-1, 1).unsqueeze(1)
+
+        # Compute loss
+        total_loss = torch.mean(F.mse_loss(outputs_tensor, rewards_tensor))
+
+        # Perform backward pass and optimization step
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+
+        return total_loss
+
