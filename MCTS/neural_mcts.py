@@ -63,11 +63,11 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             if self.update_form_buffer:
                 self.buffer["states_data"].append(input_data)
                 self.buffer["selected_action_data"].append(selected_action)
-                self.buffer["values_data"].append(current_node.value)
 
-        # Evaluate the value of the final state using the value_network
-        input_data = self.convert_node_to_input(current_node)
-        value = self.value_network.forward(input_data)
+                # Evaluate the value of the final state using the value_network
+                input_data = self.convert_node_to_input(current_node)
+                output_value = self.value_network.forward(input_data)
+                self.buffer["values_data"].append(output_value)
 
         # format reward by player
         if current_node.is_winner("Black"):
@@ -78,7 +78,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             self.win_rate["White"] += 1
 
         # Return the state value as a reward
-        return current_node, value
+        return current_node, self.current_reward
 
     def backpropagation(self, node, reward):
         """
@@ -92,9 +92,8 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             if len(self.buffer["states_data"]) > self.buffer_size:
 
                 # Update the value network
-                rewards = tuple([reward] * len(self.buffer["values_data"]))
-
-                loss = self.value_network.batch_update(rewards, self.buffer["values_data"])
+                rewards = list([reward] * len(self.buffer["values_data"]))
+                loss = self.value_network.batch_update(self.buffer["values_data"], rewards)
                 self.losses["value_losses"].append(loss.item())
 
                 # Update the policy network
@@ -111,11 +110,13 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             input_data = self.convert_node_to_input(node)
 
             # Update the value network
-            loss = self.value_network.update(reward, node.value)
+            old_value = self.value_network.forward(input_data)
+
+            loss = self.value_network.update(old_value, self.current_reward)
             self.losses["policy_losses"].append(loss.item())
 
             # Update the policy network
-            loss = self.policy_network.update(input_data, node.action, node.value)
+            loss = self.policy_network.update(input_data, node.action, self.current_reward)
             self.losses["value_losses"].append(loss.item())
 
         node.visits += 1
@@ -156,7 +157,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
                     state_copy[i][j] = piece_to_idx[str(cell)]
 
         # create tensor
-        tensor = torch.tensor(state_copy, dtype=torch.float32).view(1, 64).clone().detach()
+        tensor = torch.tensor(state_copy, dtype=torch.float32).view(-1).clone().detach()
 
         return tensor
 

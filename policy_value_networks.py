@@ -89,11 +89,12 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         Returns:
             None
         """
-        one_hot_target = self.get_one_hot_target(target).clone().detach().requires_grad_(True)
-        reward = torch.tensor([reward]).view(1, 1)
+        target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long)
+
+        reward = torch.tensor(float(reward), requires_grad=True)
 
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        loss = F.cross_entropy(output, one_hot_target) * reward
+        loss = F.cross_entropy(output, target_class) + reward
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -115,16 +116,16 @@ class PolicyNet(nn.Module, SaveLoadInterface):
 
         # Convert lists to tensors
         outputs_tensor = torch.stack(outputs)
-        rewards_tensor = torch.tensor(reward, dtype=torch.float32).view(-1, 1)
+        rewards_tensor = torch.tensor(float(reward), requires_grad=True)
 
         targets_tensor = []
         for target in targets:
-            one_hot = self.get_one_hot_target(target).clone().detach().requires_grad_(True)
-            targets_tensor.append(one_hot)
+            target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long)
+            targets_tensor.append(target_class)
         one_hot_targets = torch.stack(targets_tensor)
 
         # Compute loss
-        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) * rewards_tensor)
+        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) + rewards_tensor)
 
         # Perform backward pass and optimization step
         optimizer.zero_grad()
@@ -162,12 +163,9 @@ class PolicyNet(nn.Module, SaveLoadInterface):
 
         one_hot_label = torch.zeros(num_classes)
         action_index = self.action_labels.index(target)
+        one_hot_label[action_index] = 1
 
-        one_hot_label[action_index] = 1.
-
-        tensor = one_hot_label.view(1, 64).clone().detach()
-
-        return tensor
+        return one_hot_label
 
 
 class ValueNet(nn.Module, SaveLoadInterface):
@@ -221,9 +219,7 @@ class ValueNet(nn.Module, SaveLoadInterface):
         Returns:
             lose
         """
-        reward_tensor = torch.tensor([reward], dtype=torch.float32).view(1, 1)
-        reward_tensor = reward_tensor.clone().detach()
-        output = output.clone().detach().requires_grad_(True)
+        reward_tensor = torch.tensor(float(reward), requires_grad=True).view(1, 1)
 
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         loss = F.mse_loss(output, reward_tensor)
@@ -247,7 +243,8 @@ class ValueNet(nn.Module, SaveLoadInterface):
 
         # Convert lists to tensors
         outputs_tensor = torch.stack(outputs)
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).view(-1, 1).unsqueeze(1)
+        rewards = [torch.tensor(reward) for reward in rewards]
+        rewards_tensor = torch.stack(rewards).unsqueeze(1).unsqueeze(1)
 
         # Compute loss
         total_loss = torch.mean(F.mse_loss(outputs_tensor, rewards_tensor))
