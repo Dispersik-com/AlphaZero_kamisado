@@ -6,7 +6,7 @@ from MCTS.mcts import MonteCarloTreeSearch
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
-    def __init__(self, game, policy_network, value_network, player="Black", update_form_buffer=True, buffer_size=1000):
+    def __init__(self, game, policy_network, value_network, player="Black", update_form_buffer=True, batch_size=32):
         super().__init__(game, player=player)
         # add policy and value networks
         self.policy_network = policy_network
@@ -18,9 +18,13 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
         self.win_rate = {"Black": 0, "White": 0}
 
-        if self.update_form_buffer:
-            self.buffer_size = buffer_size
-            self.buffer = {"states_data": [], "selected_action_data": [], "values_data": []}
+        self.batch_size = batch_size
+        self.buffer = {
+                       "states_data": [],
+                       "selected_action_data": [],
+                       "values_data": [],
+                       "node_value_data": []
+                       }
 
     def simulate(self, node):
         """
@@ -47,7 +51,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             input_data = self.convert_node_to_input(current_node)
 
             # get move probabilities from the policy_network
-            action_probs = self.policy_network.forward(input_data)
+            action_probs = self.policy_network(input_data)
 
             # # apply mask by legal moves
             mask = self.policy_network.create_mask(legal_actions)
@@ -57,17 +61,21 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             action_index = torch.argmax(action_probs_by_legal_moves).item()
             selected_action = self.policy_network.action_labels[action_index]
 
-            current_node = current_node.expand(action=selected_action)
-
             # add data to buffer
-            if self.update_form_buffer:
-                self.buffer["states_data"].append(input_data)
-                self.buffer["selected_action_data"].append(selected_action)
 
-                # Evaluate the value of the final state using the value_network
-                input_data = self.convert_node_to_input(current_node)
-                output_value = self.value_network.forward(input_data)
-                self.buffer["values_data"].append(output_value)
+            self.buffer["states_data"].append(input_data)
+            self.buffer["selected_action_data"].append(selected_action)
+
+            # Evaluate the value of the final state using the value_network
+            input_data = self.convert_node_to_input(current_node)
+            output_value = self.value_network(input_data)
+            self.buffer["values_data"].append(output_value)
+
+            # get real value data and normalized
+            normalized_node_value = torch.tanh(torch.tensor(current_node.value))
+            self.buffer["node_value_data"].append(normalized_node_value)
+
+            current_node = current_node.expand(action=selected_action)
 
         # format reward by player
         if current_node.is_winner("Black"):
@@ -80,50 +88,45 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         # Return the state value as a reward
         return current_node, self.current_reward
 
-    def backpropagation(self, node, reward):
-        """
-        Update the node's visit count and value based on the result of a simulation.
+    def update_network(self):
 
-        Args:
-            node:
-            reward: The reward of the simulation.
-        """
         if self.update_form_buffer:
-            if len(self.buffer["states_data"]) > self.buffer_size:
+            shift = 0
+            while True:
+                state = self.buffer["states_data"][shift:self.batch_size + shift]
+                selected_action = self.buffer["selected_action_data"][shift:self.batch_size + shift]
+                value = self.buffer["values_data"][shift:self.batch_size + shift]
+                node_value = self.buffer["node_value_data"][shift:self.batch_size + shift]
 
-                # Update the value network
-                rewards = list([reward] * len(self.buffer["values_data"]))
-                loss = self.value_network.batch_update(self.buffer["values_data"], rewards)
-                self.losses["value_losses"].append(loss.item())
+                if len(state) == 0:
+                    break
 
-                # Update the policy network
-                loss = self.policy_network.batch_update(self.buffer["states_data"],
-                                                        self.buffer["selected_action_data"],
-                                                        self.current_reward)
+                loss = self.value_network.batch_update(value, node_value)
                 self.losses["policy_losses"].append(loss.item())
 
-                # clean buffer
-                self.buffer = {"states_data": [], "selected_action_data": [], "values_data": []}
+                # Update the policy network
+                loss = self.policy_network.batch_update(state, selected_action, node_value)
+                self.losses["value_losses"].append(loss.item())
+
+                shift += self.batch_size
 
         else:
+            for i in range(len(self.buffer["states_data"])):
 
-            input_data = self.convert_node_to_input(node)
+                state = self.buffer["states_data"][i]
+                selected_action = self.buffer["selected_action_data"][i]
+                value = self.buffer["values_data"][i]
+                node_value = self.buffer["node_value_data"][i]
 
-            # Update the value network
-            old_value = self.value_network.forward(input_data)
+                loss = self.value_network.update(value, node_value)
+                self.losses["policy_losses"].append(loss.item())
 
-            loss = self.value_network.update(old_value, self.current_reward)
-            self.losses["policy_losses"].append(loss.item())
+                # Update the policy network
+                loss = self.policy_network.update(state, selected_action, node_value)
+                self.losses["value_losses"].append(loss.item())
 
-            # Update the policy network
-            loss = self.policy_network.update(input_data, node.action, self.current_reward)
-            self.losses["value_losses"].append(loss.item())
-
-        node.visits += 1
-        node.value += reward
-
-        if node.parent and node.parent.action is not None:
-            self.backpropagation(node.parent, reward)
+        # clean buffer
+        self.buffer = {"states_data": [], "selected_action_data": [], "values_data": [], "node_value_data": []}
 
     def get_losses(self, reset_losses=False):
         losses = self.losses
@@ -144,10 +147,10 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         """
         state = node.state.game_board.tolist()
 
-        piece_to_idx = {'B-O': 0, 'B-A': 1, 'B-V': 2, 'B-P': 3,
-                        'B-Y': 4, 'B-R': 5, 'B-G': 6, 'B-B': 7,
-                        'W-B': 8, 'W-G': 9, 'W-R': 10, 'W-Y': 11,
-                        'W-P': 12, 'W-V': 13, 'W-A': 14, 'W-O': 15}
+        piece_to_idx = {'B-O': 1, 'B-A': 2, 'B-V': 3, 'B-P': 4,
+                        'B-Y': 5, 'B-R': 6, 'B-G': 7, 'B-B': 8,
+                        'W-B': 9, 'W-G': 10, 'W-R': 11, 'W-Y': 12,
+                        'W-P': 13, 'W-V': 14, 'W-A': 15, 'W-O': 16}
 
         state_copy = copy.deepcopy(state)
 
