@@ -4,35 +4,7 @@ from torch import optim
 import torch.nn.functional as F
 
 
-class SaveLoadInterface:
-
-    def save_model(self, file_path):
-        """
-        Saves the model parameters to a file.
-
-        Args:
-            file_path (str): The path to the file where the model parameters will be saved.
-        """
-        torch.save(self.state_dict(), file_path)
-
-    @classmethod
-    def load_model(cls, file_path):
-        """
-        Creates a new instance of the model and loads parameters from a file.
-
-        Args:
-            file_path (str): The path to the file from which the model parameters will be loaded.
-
-        Returns:
-            PolicyNet: The loaded model.
-        """
-        model = cls()
-        model.load_state_dict(torch.load(file_path))
-        model.eval()  # Set the model to evaluation mode
-        return model
-
-
-class PolicyNet(nn.Module, SaveLoadInterface):
+class PolicyNet(nn.Module):
     """
     A neural network model for policy estimation in a game.
 
@@ -56,6 +28,8 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         # set labels for output
         size = 8
         self.action_labels = [(x // size, x % size) for x in range(size*size)]
+
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
     def forward(self, x):
         """
@@ -93,11 +67,10 @@ class PolicyNet(nn.Module, SaveLoadInterface):
 
         reward = torch.tensor(float(reward), requires_grad=True)
 
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         loss = F.cross_entropy(output, target_class) + reward
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+        self.optimizer.step()
         return loss
 
     def batch_update(self, outputs, targets, reward: float):
@@ -112,11 +85,10 @@ class PolicyNet(nn.Module, SaveLoadInterface):
             Returns:
                 losses
             """
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
         # Convert lists to tensors
         outputs_tensor = torch.stack(outputs)
-        rewards_tensor = torch.tensor(float(reward), requires_grad=True)
+        rewards_tensor = torch.tensor(reward, requires_grad=True)
 
         targets_tensor = []
         for target in targets:
@@ -128,9 +100,9 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) + rewards_tensor)
 
         # Perform backward pass and optimization step
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
         total_loss.backward()
-        optimizer.step()
+        self.optimizer.step()
 
         return total_loss
 
@@ -168,7 +140,7 @@ class PolicyNet(nn.Module, SaveLoadInterface):
         return one_hot_label
 
 
-class ValueNet(nn.Module, SaveLoadInterface):
+class ValueNet(nn.Module):
     """
     A neural network model for estimating the value of a game state.
 
@@ -188,7 +160,9 @@ class ValueNet(nn.Module, SaveLoadInterface):
         self.fc1 = nn.Linear(64 * 8 * 8, 256)
         self.fc2 = nn.Linear(256, 1)    # output for state value
 
-        self.learning_rate=learning_rate
+        self.learning_rate = learning_rate
+
+        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
     def forward(self, x):
         """
@@ -221,11 +195,10 @@ class ValueNet(nn.Module, SaveLoadInterface):
         """
         reward_tensor = torch.tensor(float(reward), requires_grad=True).view(1, 1)
 
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        loss = F.mse_loss(output, reward_tensor)
-        optimizer.zero_grad()
+        loss = F.mse_loss(output.detach(), reward_tensor)
+        self.optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+        self.optimizer.step()
         return loss
 
     def batch_update(self, outputs, rewards):
@@ -239,20 +212,18 @@ class ValueNet(nn.Module, SaveLoadInterface):
         Returns:
             losses
         """
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
         # Convert lists to tensors
-        outputs_tensor = torch.stack(outputs)
-        rewards = [torch.tensor(reward) for reward in rewards]
-        rewards_tensor = torch.stack(rewards).unsqueeze(1).unsqueeze(1)
+        outputs_tensor = torch.stack(outputs).squeeze(1).detach().requires_grad_(True)
+        rewards_tensor = torch.stack(rewards).unsqueeze(1)
 
         # Compute loss
         total_loss = torch.mean(F.mse_loss(outputs_tensor, rewards_tensor))
 
         # Perform backward pass and optimization step
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
         total_loss.backward()
-        optimizer.step()
+        self.optimizer.step()
 
         return total_loss
 
