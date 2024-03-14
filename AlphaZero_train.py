@@ -1,4 +1,4 @@
-from MCTS.neural_mcts import NeuralMonteCarloTreeSearch, MonteCarloTreeSearch
+from MCTS.neural_mcts import NeuralMonteCarloTreeSearch
 from policy_value_networks import PolicyNet, ValueNet
 from game_environment.kamisado_enviroment import KamisadoGame
 import matplotlib.pyplot as plt
@@ -24,16 +24,12 @@ def create_agent(game, player="Black"):
     policy_net = PolicyNet(learning_rate=config.policy_learning_rate)
     value_net = ValueNet(learning_rate=config.value_learning_rate)
 
-    if config.use_gpu:
-        policy_net.cuda()
-        value_net.cuda()
-
     neural_mcts = NeuralMonteCarloTreeSearch(game=game,
                                              player=player,
                                              policy_network=policy_net,
                                              value_network=value_net,
                                              update_form_buffer=config.batch_learning,
-                                             buffer_size=config.batch_size)
+                                             batch_size=config.batch_size)
 
     return neural_mcts
 
@@ -44,10 +40,13 @@ def self_play_and_train(epochs, num_simulations):
 
     for epoch in range(epochs):
         agent_player.search(num_simulations=num_simulations)
+        agent_player.update_network()
 
         print(f"Epochs: {epoch};",
               f"Games passed: {epoch * num_simulations};",
-              f"Win rate: {agent_player.get_win_rate():.2f}",
+              f"Win rate: {agent_player.get_win_rate():.2f} ",
+              f"White win: {agent_player.win_rate['White']}.  /  "
+              f"Black win: {agent_player.win_rate['Black']}.",
               "=" * 100, sep="\n")
 
     losses = agent_player.get_losses()

@@ -5,19 +5,16 @@ policy_learning_rate = 0.001
 value_learning_rate = 0.001
 
 # Flag indicating whether batch learning is enabled
-batch_learning = False
+batch_learning = True
 
 # Size of data batch for single update
-batch_size = 32
-
-# Flag indicating whether GPU is utilized for computations
-use_gpu = False
+batch_size = 64
 
 # Number of training epochs
-epochs = 1000
+epochs = 10
 
 # Number of simulations in Monte Carlo method
-num_simulations = 10_000
+num_simulations = 100
 
 # Flag save models
 save_models = False
