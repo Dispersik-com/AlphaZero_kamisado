@@ -16,6 +16,9 @@ epochs = 10
 # Number of simulations in Monte Carlo method
 num_simulations = 100
 
+# Max number of validations per epoch
+num_validations = 50
+
 # Flag save models
 save_models = False
 
