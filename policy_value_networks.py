@@ -67,7 +67,7 @@ class PolicyNet(nn.Module):
 
         reward = torch.tensor(float(reward), requires_grad=True)
 
-        loss = F.cross_entropy(output, target_class) + reward
+        loss = F.cross_entropy(output, target_class) * reward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -97,7 +97,7 @@ class PolicyNet(nn.Module):
         one_hot_targets = torch.stack(targets_tensor)
 
         # Compute loss
-        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) + rewards_tensor)
+        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) * rewards_tensor)
 
         # Perform backward pass and optimization step
         self.optimizer.zero_grad()
@@ -194,8 +194,7 @@ class ValueNet(nn.Module):
             lose
         """
         reward_tensor = torch.tensor(float(reward), requires_grad=True).view(1, 1)
-
-        loss = F.mse_loss(output.detach(), reward_tensor)
+        loss = F.mse_loss(output, reward_tensor)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -214,7 +213,7 @@ class ValueNet(nn.Module):
         """
 
         # Convert lists to tensors
-        outputs_tensor = torch.stack(outputs).squeeze(1).detach().requires_grad_(True)
+        outputs_tensor = torch.stack(outputs).squeeze(1)
         rewards_tensor = torch.stack(rewards).unsqueeze(1)
 
         # Compute loss

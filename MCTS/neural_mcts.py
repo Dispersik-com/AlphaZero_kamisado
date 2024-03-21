@@ -1,5 +1,3 @@
-import copy
-
 import torch
 
 from MCTS.mcts import MonteCarloTreeSearch
@@ -16,15 +14,17 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         self.losses = {"policy_losses": [], "value_losses": []}
         self.update_form_buffer = update_form_buffer
 
-        self.win_rate = {"Black": 0, "White": 0}
-
         self.batch_size = batch_size
         self.buffer = {
                        "states_data": [],
                        "selected_action_data": [],
-                       "values_data": [],
                        "node_value_data": []
                        }
+
+        # metrics
+        self.win_rate = {"Black": 0, "White": 0}
+        self.total_reward = 0
+        self.count_rewards = 0
 
     def simulate(self, node):
         """
@@ -53,7 +53,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             # get move probabilities from the policy_network
             action_probs = self.policy_network(input_data)
 
-            # # apply mask by legal moves
+            # apply mask by legal moves
             mask = self.policy_network.create_mask(legal_actions)
             action_probs_by_legal_moves = action_probs * mask.float()
 
@@ -65,11 +65,6 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
             self.buffer["states_data"].append(input_data)
             self.buffer["selected_action_data"].append(selected_action)
-
-            # Evaluate the value of the final state using the value_network
-            input_data = self.convert_node_to_input(current_node)
-            output_value = self.value_network(input_data)
-            self.buffer["values_data"].append(output_value)
 
             # get real value data and normalized
             normalized_node_value = torch.tanh(torch.tensor(current_node.value))
@@ -85,6 +80,8 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             self.current_reward = -1.0 * self.reward_by_player
             self.win_rate["White"] += 1
 
+        self.total_reward += self.current_reward
+        self.count_rewards += 1
         # Return the state value as a reward
         return current_node, self.current_reward
 
@@ -93,20 +90,23 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         if self.update_form_buffer:
             shift = 0
             while True:
-                state = self.buffer["states_data"][shift:self.batch_size + shift]
-                selected_action = self.buffer["selected_action_data"][shift:self.batch_size + shift]
-                value = self.buffer["values_data"][shift:self.batch_size + shift]
-                node_value = self.buffer["node_value_data"][shift:self.batch_size + shift]
+                states = self.buffer["states_data"][shift:self.batch_size + shift]
+                selected_actions = self.buffer["selected_action_data"][shift:self.batch_size + shift]
+                node_values = self.buffer["node_value_data"][shift:self.batch_size + shift]
 
-                if len(state) == 0:
+                if len(states) == 0:
                     break
 
-                loss = self.value_network.batch_update(value, node_value)
-                self.losses["policy_losses"].append(loss.item())
+                values = []
+                for s in states:
+                    values.append(self.value_network(s))
+
+                loss = self.value_network.batch_update(values, node_values)
+                self.losses["value_losses"].append(loss.item())
 
                 # Update the policy network
-                loss = self.policy_network.batch_update(state, selected_action, node_value)
-                self.losses["value_losses"].append(loss.item())
+                loss = self.policy_network.batch_update(states, selected_actions, node_values)
+                self.losses["policy_losses"].append(loss.item())
 
                 shift += self.batch_size
 
@@ -115,18 +115,18 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
                 state = self.buffer["states_data"][i]
                 selected_action = self.buffer["selected_action_data"][i]
-                value = self.buffer["values_data"][i]
                 node_value = self.buffer["node_value_data"][i]
 
+                value = self.value_network(state)
                 loss = self.value_network.update(value, node_value)
-                self.losses["policy_losses"].append(loss.item())
+                self.losses["value_losses"].append(loss.item())
 
                 # Update the policy network
                 loss = self.policy_network.update(state, selected_action, node_value)
-                self.losses["value_losses"].append(loss.item())
+                self.losses["policy_losses"].append(loss.item())
 
         # clean buffer
-        self.buffer = {"states_data": [], "selected_action_data": [], "values_data": [], "node_value_data": []}
+        self.buffer = {"states_data": [], "selected_action_data": [], "node_value_data": []}
 
     def get_losses(self, reset_losses=False):
         losses = self.losses
@@ -152,20 +152,23 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
                         'W-B': 9, 'W-G': 10, 'W-R': 11, 'W-Y': 12,
                         'W-P': 13, 'W-V': 14, 'W-A': 15, 'W-O': 16}
 
-        state_copy = copy.deepcopy(state)
-
-        for i, row in enumerate(state_copy):
+        for i, row in enumerate(state):
             for j, cell in enumerate(row):
                 if str(cell) in piece_to_idx.keys():
-                    state_copy[i][j] = piece_to_idx[str(cell)]
+                    state[i][j] = piece_to_idx[str(cell)]
 
         # create tensor
-        tensor = torch.tensor(state_copy, dtype=torch.float32).view(-1).clone().detach()
+        tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True).view(-1).detach()
 
         return tensor
 
     def get_win_rate(self):
+        total_games = self.win_rate["Black"] + self.win_rate["White"]
+
+        if total_games == 0:
+            return 0
+
         if self.reward_by_player == 1.0:
-            return self.win_rate["Black"] / self.win_rate["White"]
+            return (self.win_rate["Black"] / total_games) * 100
         else:
-            return self.win_rate["White"] / self.win_rate["Black"]
+            return (self.win_rate["White"] / total_games) * 100

@@ -70,7 +70,7 @@ class TestValueNet(unittest.TestCase):
                                           0., 0., 0., 0., 0., 0., 0., 0.,
                                           9., 10., 11., 12., 13., 14., 15., 16.], requires_grad=True)
 
-        output_tensor = self.value_net.forward(input_tensor)
+        output_tensor = self.value_net(input_tensor)
         target = 1.0  # Example target value
         self.value_net.update(output_tensor, target)  # Update network parameters
         # check gradient is not None
