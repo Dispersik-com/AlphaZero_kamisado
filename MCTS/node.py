@@ -57,7 +57,16 @@ class MCTSNode:
             selection_function = lambda child: child.value / child.visits + exploration_weight * math.sqrt(
                 math.log(self.parent.visits) / (2 * child.visits))
 
-        # TODO: To be implemented are other strategies: Exp3 and Thompson Sampling.
+        elif strategy == "Exp3":
+            selection_function = lambda child: ((1 - exploration_weight) * child.value / child.visits +
+                                                exploration_weight / len(self.children))
+
+        elif strategy == "ThompsonSampling":
+            sampled_values = [random.betavariate(child.value + 1, child.visits - child.value + 1) for child in
+                              self.children]
+            selected_child_index = sampled_values.index(max(sampled_values))
+            selected_child = self.children[selected_child_index]
+            return selected_child
 
         else:
             raise ValueError("Invalid strategy specified")
