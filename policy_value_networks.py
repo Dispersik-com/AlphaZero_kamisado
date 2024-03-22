@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+import config
 
 
 class PolicyNet(nn.Module):
@@ -63,9 +64,9 @@ class PolicyNet(nn.Module):
         Returns:
             None
         """
-        target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long)
+        target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long, device=config.device)
 
-        reward = torch.tensor(float(reward), requires_grad=True)
+        reward = torch.tensor(float(reward), requires_grad=True, device=config.device)
 
         loss = F.cross_entropy(output, target_class) * reward
         self.optimizer.zero_grad()
@@ -87,14 +88,14 @@ class PolicyNet(nn.Module):
             """
 
         # Convert lists to tensors
-        outputs_tensor = torch.stack(outputs)
-        rewards_tensor = torch.tensor(reward, requires_grad=True)
+        outputs_tensor = torch.stack(outputs).to(config.device)
+        rewards_tensor = torch.tensor(reward, requires_grad=True, device=config.device)
 
         targets_tensor = []
         for target in targets:
-            target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long)
+            target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long, device=config.device)
             targets_tensor.append(target_class)
-        one_hot_targets = torch.stack(targets_tensor)
+        one_hot_targets = torch.stack(targets_tensor).to(config.device)
 
         # Compute loss
         total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) * rewards_tensor)
@@ -117,7 +118,7 @@ class PolicyNet(nn.Module):
                 mask: Tensor mask indicating valid actions.
             """
         indices_valid_actions = [i for i, x in enumerate(self.action_labels) if x in valid_actions]
-        mask = torch.zeros(len(self.action_labels))
+        mask = torch.zeros(len(self.action_labels), device=config.device)
         mask[indices_valid_actions] = 1
         return mask
 
@@ -133,7 +134,7 @@ class PolicyNet(nn.Module):
         """
         num_classes = len(self.action_labels)
 
-        one_hot_label = torch.zeros(num_classes)
+        one_hot_label = torch.zeros(num_classes, device=config.device)
         action_index = self.action_labels.index(target)
         one_hot_label[action_index] = 1
 
@@ -193,7 +194,7 @@ class ValueNet(nn.Module):
         Returns:
             lose
         """
-        reward_tensor = torch.tensor(float(reward), requires_grad=True).view(1, 1)
+        reward_tensor = torch.tensor(float(reward), requires_grad=True, device=config.device).view(1, 1)
         loss = F.mse_loss(output, reward_tensor)
         self.optimizer.zero_grad()
         loss.backward()
@@ -213,8 +214,8 @@ class ValueNet(nn.Module):
         """
 
         # Convert lists to tensors
-        outputs_tensor = torch.stack(outputs).squeeze(1)
-        rewards_tensor = torch.stack(rewards).unsqueeze(1)
+        outputs_tensor = torch.stack(outputs).squeeze(1).to(config.device)
+        rewards_tensor = torch.stack(rewards).unsqueeze(1).to(config.device)
 
         # Compute loss
         total_loss = torch.mean(F.mse_loss(outputs_tensor, rewards_tensor))

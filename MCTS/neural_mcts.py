@@ -2,6 +2,7 @@ import random
 from collections import deque
 from MCTS.mcts import MonteCarloTreeSearch
 import torch
+import config
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
@@ -83,7 +84,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             self.buffer["selected_action_data"].append(selected_action)
 
             # get real value data and normalized
-            normalized_node_value = torch.tanh(torch.tensor(current_node.value))
+            normalized_node_value = torch.tanh(torch.tensor(current_node.value, device=config.device))
             self.buffer["node_value_data"].append(normalized_node_value)
 
             current_node = current_node.expand(action=selected_action)
@@ -205,7 +206,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
                     validation_data["value_estimations"].append(output_value.item())
                     validation_data["policy_estimations"].append(output_policy.detach().clone())
 
-                node_value = torch.tanh(torch.tensor(current_node.value))
+                node_value = torch.tanh(torch.tensor(current_node.value, device=config.device))
                 validation_data["true_values"].append(torch.tanh(node_value).item())
 
                 expert_action = current_node.select_child(strategy=validate_strategy).action
@@ -241,7 +242,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
                     state[i][j] = piece_to_idx[str(cell)]
 
         # create tensor
-        tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True).view(-1).detach()
+        tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True, device=config.device).view(-1).detach()
 
         return tensor
 
