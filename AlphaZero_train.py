@@ -1,16 +1,11 @@
-import random
-from collections import deque
 from tqdm.autonotebook import tqdm
 from MCTS.neural_mcts import NeuralMonteCarloTreeSearch
+from MCTS.mcts import MonteCarloTreeSearch
 from policy_value_networks import PolicyNet, ValueNet
 from game_environment.kamisado_enviroment import KamisadoGame
 import config
 from metrics import *
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-if device == "cuda":
-    torch.cuda.set_device(device)
+from opponent import MCTSOpponent
 
 
 def create_agent(game, player="White"):
@@ -28,16 +23,30 @@ def create_agent(game, player="White"):
     return neural_mcts
 
 
-def self_play_and_train(epochs, num_simulations, num_validations, validate=False):
-    game = KamisadoGame()
-    agent_player = create_agent(game=game)
+def self_play_and_train(epochs, num_simulations, num_validations, validate=True):
 
+    # create game
+    game = KamisadoGame()
+
+    # create agent
+    agent_player = create_agent(game=game, player="White")
+
+    # create opponent for agent
+    mcts = MonteCarloTreeSearch(game=game, player="Black",
+                                strategy=config.opponent_strategy)
+
+    mcts_player = MCTSOpponent(game=game, agent_player=mcts)
+
+    agent_player.set_opponent(mcts_player)
+
+    # add metrics
     win_rate_list = []
     value_accuracy = []
+    policy_accuracy = []
     eval_reward = []
 
+    # train cycle
     for _ in tqdm(range(epochs)):
-        # agent_player.reward_by_player *= -1.
 
         agent_player.value_network.train()
         agent_player.policy_network.train()
@@ -45,56 +54,34 @@ def self_play_and_train(epochs, num_simulations, num_validations, validate=False
         agent_player.search(num_simulations=num_simulations)
         agent_player.update_network()
 
-        """  add metrics  """
+        if validate:
+            validation_data = agent_player.validate_searching(num_validations=num_validations)
+
+            value_accuracy.append(evaluate_value_accuracy(validation_data["value_estimations"],
+                                                          validation_data["true_values"]))
+
+            policy_accuracy.append(evaluate_move_quality(validation_data["policy_estimations"],
+                                                         validation_data["expert_moves"]))
 
         win_rate_list.append(agent_player.get_win_rate())
 
-        if validate:
-            agent_player.value_network.eval()
-            agent_player.policy_network.eval()
-
-            model_estimations = []
-            true_values = []
-            for i in range(num_validations):
-
-                root = agent_player.root
-                queue = deque([root])
-
-                while queue:
-                    current_node = queue.popleft()
-
-                    with torch.no_grad():
-                        # predict value
-                        input_data = agent_player.convert_node_to_input(current_node)
-
-                        model_estimations.append(agent_player.value_network(input_data).item())
-                        node_value = torch.tanh(torch.tensor(current_node.value))
-                        true_values.append(torch.tanh(node_value).item())
-
-                    queue.extend(random.choice([current_node.children]))
-
-            value_accuracy.append(evaluate_value_accuracy(model_estimations, true_values))
-
-        eval_reward.append(calculate_average_reward(agent_player.total_reward, agent_player.count_rewards))
-
-        print('-'*50,
-              f'win rate: {agent_player.get_win_rate()}',
-              f'B =  {agent_player.win_rate["Black"]}',
-              f'W = {agent_player.win_rate["White"]}',
-              sep="\n")
-
+        eval_reward.append(calculate_average_reward(agent_player.total_reward,
+                                                    agent_player.count_rewards))
 
     # Plot metrics
 
     # losses = agent_player.get_losses()
     # plot_metrics(losses, xlabel="Epochs", ylabel="losses", title="Losses")
 
-    plot_metrics({"Value accuracy": value_accuracy},
-                 xlabel="Epochs", ylabel="accuracy", title="Value accuracy")
-    plot_metrics({"Win Rate": win_rate_list},
-                 xlabel="Epochs", ylabel="Win Rate", title="Win Rate")
+    plot_metrics({"Win Rate, %": win_rate_list},
+                 xlabel="Epochs", ylabel="win rate, %", title="Win Rate")
     plot_metrics({"Rewards": eval_reward},
-                 xlabel="Epochs", ylabel="reward", title="Evaluation rewards")
+                 xlabel="Epochs", ylabel="rewards", title="Evaluation rewards")
+
+    plot_metrics({"Value accuracy": value_accuracy},
+                 xlabel="Epochs", ylabel="accuracy", title="Evaluation value accuracy")
+    plot_metrics({"Move quality": policy_accuracy},
+                 xlabel="Epochs", ylabel="accuracy", title="Evaluation move quality")
 
     if config.save_models:
         agent_player.policy_network.save_model(config.policy_save_filename)
@@ -104,7 +91,8 @@ def self_play_and_train(epochs, num_simulations, num_validations, validate=False
 if __name__ == "__main__":
     self_play_and_train(epochs=config.epochs,
                         num_simulations=config.num_simulations,
-                        num_validations=config.num_validations)
+                        num_validations=config.num_validations,
+                        validate=config.validate)
 
-    if device == "cuda":
+    if config.device == "cuda":
         torch.cuda.empty_cache()

@@ -1,3 +1,8 @@
+import torch
+
+# set cuda if is available
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 # Learning rate for policy update
 policy_learning_rate = 0.001
 
@@ -16,6 +21,9 @@ epochs = 10
 # Number of simulations in Monte Carlo method
 num_simulations = 100
 
+# Flag indicating whether validation is enabled
+validate = True
+
 # Max number of validations per epoch
 num_validations = 50
 
@@ -26,3 +34,9 @@ save_models = False
 policy_save_filename = "policy_model.pth"
 
 value_save_filename = "value_model.pth"
+
+""" Opponent settings """
+
+# Strategy for the opponent
+opponent_strategy = "ThompsonSampling"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
+

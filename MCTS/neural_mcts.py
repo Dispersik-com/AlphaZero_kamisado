@@ -153,6 +153,70 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             self.losses = {"policy_losses": [], "value_losses": []}
         return losses
 
+    def validate_searching(self, num_validations=100, validate_strategy="UCB1"):
+        """
+        Method to validate the searching process of the MCTS algorithm.
+
+        Args:
+            validate_strategy (str): Strategy used for validation. Default is "UCB1".
+                Available strategies: "UCB1", "UCB1-Tuned", "Epx3", "ThompsonSampling".
+            num_validations (int): Number of validation runs to perform.
+
+        Returns:
+            dict: Validation data containing network predictions and target data.
+                - "value_estimations": List of estimated values by the value network.
+                - "policy_estimations": List of estimated policies by the policy network.
+                - "true_values": List of true values from the current nodes.
+                - "expert_moves": List of expert moves selected during validation.
+
+        Note:
+            This method evaluates the policy and value networks using the provided number of validations.
+            It simulates MCTS searches and collects data for validation purposes.
+        """
+        self.value_network.eval()
+        self.policy_network.eval()
+
+        validation_data = {
+            # networks predictions
+            "value_estimations": [],
+            "policy_estimations": [],
+
+            # target data
+            "true_values": [],
+            "expert_moves": [],
+        }
+
+        for i in range(num_validations):
+
+            root = self.root
+            queue = deque([root])
+
+            current_node = self.root
+
+            # Collecting data for model validation
+            while queue and current_node.get_legal_actions():
+
+                input_data = self.convert_node_to_input(current_node)
+
+                with torch.no_grad():
+                    output_value = self.value_network(input_data.detach().clone())
+                    output_policy = self.policy_network(input_data.detach().clone())
+
+                    validation_data["value_estimations"].append(output_value.item())
+                    validation_data["policy_estimations"].append(output_policy.detach().clone())
+
+                node_value = torch.tanh(torch.tensor(current_node.value))
+                validation_data["true_values"].append(torch.tanh(node_value).item())
+
+                expert_action = current_node.select_child(strategy=validate_strategy).action
+                validation_data["expert_moves"].append(expert_action)
+
+                queue.extend([random.choice(current_node.children)])
+
+                current_node = queue.popleft()
+
+        return validation_data
+
     @staticmethod
     def convert_node_to_input(node):
         """
