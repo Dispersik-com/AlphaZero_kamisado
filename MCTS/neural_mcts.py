@@ -1,14 +1,17 @@
-import torch
-
+import random
+from collections import deque
 from MCTS.mcts import MonteCarloTreeSearch
+import torch
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
-    def __init__(self, game, policy_network, value_network, player="Black", update_form_buffer=True, batch_size=32):
+    def __init__(self, game, policy_network, value_network, player="Black",  update_form_buffer=True, batch_size=32):
         super().__init__(game, player=player)
         # add policy and value networks
         self.policy_network = policy_network
         self.value_network = value_network
+
+        self.opponent_player = None
 
         self.current_reward = 0
         self.losses = {"policy_losses": [], "value_losses": []}
@@ -26,6 +29,23 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         self.total_reward = 0
         self.count_rewards = 0
 
+    def set_opponent(self, opponent):
+        self.opponent_player = opponent
+
+    def neural_network_select(self, input_data, legal_actions):
+
+        # get move probabilities from the policy_network
+        action_probs = self.policy_network(input_data)
+
+        # apply mask by legal moves
+        mask = self.policy_network.create_mask(legal_actions)
+        action_probs_by_legal_moves = action_probs * mask.float()
+
+        # choose a move according to the probabilities
+        action_index = torch.argmax(action_probs_by_legal_moves).item()
+        selected_action = self.policy_network.action_labels[action_index]
+        return selected_action
+
     def simulate(self, node):
         """
         Simulate a game starting from the given state.
@@ -39,6 +59,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         current_node = node
 
         while not current_node.is_terminal():
+
             legal_actions = current_node.get_legal_actions()
 
             if not legal_actions:
@@ -50,16 +71,11 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             # Prepare available moves in a suitable format for the neural network
             input_data = self.convert_node_to_input(current_node)
 
-            # get move probabilities from the policy_network
-            action_probs = self.policy_network(input_data)
-
-            # apply mask by legal moves
-            mask = self.policy_network.create_mask(legal_actions)
-            action_probs_by_legal_moves = action_probs * mask.float()
-
-            # choose a move according to the probabilities
-            action_index = torch.argmax(action_probs_by_legal_moves).item()
-            selected_action = self.policy_network.action_labels[action_index]
+            if self.opponent_player is not None and self.player != current_node.state.current_player:
+                self.opponent_player.set_current_node(current_node)
+                selected_action = self.opponent_player.select_move(legal_actions)
+            else:
+                selected_action = self.neural_network_select(input_data, legal_actions)
 
             # add data to buffer
 
@@ -86,6 +102,9 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         return current_node, self.current_reward
 
     def update_network(self):
+
+        self.value_network.train()
+        self.policy_network.train()
 
         if self.update_form_buffer:
             shift = 0

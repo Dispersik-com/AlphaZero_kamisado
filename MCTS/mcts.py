@@ -5,7 +5,7 @@ from MCTS.tree_serializer import TreeSerializationMixin
 
 class MonteCarloTreeSearch(TreeSerializationMixin):
 
-    def __init__(self, game, player="Black", exploration_weight=1.0):
+    def __init__(self, game, player="Black", exploration_weight=1.0, strategy="UCB1"):
         """
         Initialize the Monte Carlo Tree Search.
 
@@ -15,13 +15,10 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
         """
         self.game = game
         self.exploration_weight = exploration_weight
+        self.strategy = strategy
         self.root = MCTSNode(self.game, is_root=True)  # root of MCTS
+        self.player = player
         self.reward_by_player = 1.0 if player == "Black" else -1.0
-
-    def update_root(self, new_root):
-        self.root = new_root
-        self.root.parent = None
-        self.root.is_root = True
 
     def search(self, num_simulations, random_first_piece=True):
         """

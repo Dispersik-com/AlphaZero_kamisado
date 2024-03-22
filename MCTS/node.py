@@ -1,4 +1,5 @@
 import math
+import random
 
 
 class MCTSNode:
@@ -42,10 +43,11 @@ class MCTSNode:
             :param exploration_weight:
             :param strategy:
         """
+        filtered_children = list(filter(lambda child: child.visits != 0, self.children))
 
-        if not self.children:
-            return self
-
+        if not filtered_children or not self.children:
+            random_move = random.choice(self.get_legal_actions())
+            return self.expand(random_move)
 
         if strategy == "UCB1":
             selection_function = lambda child: child.value / child.visits + exploration_weight * math.sqrt(
@@ -60,7 +62,7 @@ class MCTSNode:
         else:
             raise ValueError("Invalid strategy specified")
 
-        selected_child = max(self.children, key=selection_function)
+        selected_child = max(filtered_children, key=selection_function)
 
         return selected_child
 
