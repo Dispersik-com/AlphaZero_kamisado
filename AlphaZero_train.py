@@ -65,8 +65,7 @@ def self_play_and_train(epochs, num_simulations, num_validations, validate=True)
 
         win_rate_list.append(agent_player.get_win_rate())
 
-        eval_reward.append(calculate_average_reward(agent_player.total_reward,
-                                                    agent_player.count_rewards))
+        eval_reward.append(agent_player.total_reward)
 
     # Plot metrics
 

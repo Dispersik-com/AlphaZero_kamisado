@@ -38,5 +38,5 @@ value_save_filename = "value_model.pth"
 """ Opponent settings """
 
 # Strategy for the opponent
-opponent_strategy = "ThompsonSampling"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
+opponent_strategy = "UCB1"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
 

@@ -35,14 +35,8 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         for i in range(num_simulations):
 
-            if self.root.state.last_move is None:
-                if random_first_piece:
-                    self.root.state.set_first_piece()
-                else:
-                    piece_color = self.game.color_dict[i]
-                    self.root.state.set_first_piece(piece_color)
-
-                self.root.action = self.root.state.last_move[0]
+            self.root_random_move(random_first_piece=random_first_piece,
+                                  piece_index=i)
 
             # step 1: select
             selected_node = self.select(self.root)
@@ -62,6 +56,16 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
         best_action = self.get_best_action(self.root)
 
         return best_action
+
+    def root_random_move(self, random_first_piece, piece_index=0):
+        if self.root.state.last_move is None:
+            if random_first_piece:
+                self.root.state.set_first_piece()
+            else:
+                piece_color = self.game.color_dict[piece_index]
+                self.root.state.set_first_piece(piece_color)
+
+            self.root.action = self.root.state.last_move[0]
 
     def simulate(self, node):
         """

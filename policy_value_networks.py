@@ -3,9 +3,10 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 import config
+import net_utils
 
 
-class PolicyNet(nn.Module):
+class PolicyNet(nn.Module, net_utils.SaveLoadInterface):
     """
     A neural network model for policy estimation in a game.
 
@@ -20,10 +21,10 @@ class PolicyNet(nn.Module):
         Initializes the PolicyNet model.
         """
         super(PolicyNet, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(64 * 8 * 8, 256)
-        self.fc2 = nn.Linear(256, 64)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1).to(config.device)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1).to(config.device)
+        self.fc1 = nn.Linear(64 * 8 * 8, 256).to(config.device)
+        self.fc2 = nn.Linear(256, 64).to(config.device)
         self.learning_rate = learning_rate
 
         # set labels for output
@@ -141,7 +142,7 @@ class PolicyNet(nn.Module):
         return one_hot_label
 
 
-class ValueNet(nn.Module):
+class ValueNet(nn.Module, net_utils.SaveLoadInterface):
     """
     A neural network model for estimating the value of a game state.
 
@@ -156,10 +157,10 @@ class ValueNet(nn.Module):
         Initializes the ValueNet model.
         """
         super(ValueNet, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(64 * 8 * 8, 256)
-        self.fc2 = nn.Linear(256, 1)    # output for state value
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1).to(config.device)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1).to(config.device)
+        self.fc1 = nn.Linear(64 * 8 * 8, 256).to(config.device).to(config.device)
+        self.fc2 = nn.Linear(256, 1).to(config.device).to(config.device)    # output for state value
 
         self.learning_rate = learning_rate
 
