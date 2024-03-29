@@ -251,8 +251,18 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
         if total_games == 0:
             return 0
-
+        win_rate = 0
         if self.reward_by_player == 1.0:
-            return (self.win_rate["Black"] / total_games) * 100
+            win_rate = (self.win_rate["Black"] / total_games) * 100
         else:
-            return (self.win_rate["White"] / total_games) * 100
+            win_rate = (self.win_rate["White"] / total_games) * 100
+
+        self.win_rate["Black"] = 0
+        self.win_rate["White"] = 0
+
+        return win_rate
+
+    def change_side(self):
+        self.player = "White" if self.player == "Black" else "Black"
+        self.opponent_player.agent_player.player = "White" if self.player == "Black" else "Black"
+

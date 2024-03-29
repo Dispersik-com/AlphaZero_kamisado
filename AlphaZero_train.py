@@ -23,7 +23,7 @@ def create_agent(game, player="White"):
     return neural_mcts
 
 
-def self_play_and_train(epochs, num_simulations, num_validations, validate=True):
+def play_and_train(epochs, num_simulations, num_validations, validate=True):
 
     # create game
     game = KamisadoGame()
@@ -67,6 +67,8 @@ def self_play_and_train(epochs, num_simulations, num_validations, validate=True)
 
         eval_reward.append(agent_player.total_reward)
 
+        agent_player.change_side()
+
     # Plot metrics
 
     # losses = agent_player.get_losses()
@@ -88,7 +90,7 @@ def self_play_and_train(epochs, num_simulations, num_validations, validate=True)
 
 
 if __name__ == "__main__":
-    self_play_and_train(epochs=config.epochs,
+    play_and_train(epochs=config.epochs,
                         num_simulations=config.num_simulations,
                         num_validations=config.num_validations,
                         validate=config.validate)

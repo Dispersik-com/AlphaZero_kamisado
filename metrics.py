@@ -2,7 +2,9 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 
-matplotlib.use(matplotlib.get_backend())
+import config
+
+matplotlib.use(config.plot_backend)
 
 
 def plot_metrics(metrics, xlabel="", ylabel="", title="", legend=True, save=True):
