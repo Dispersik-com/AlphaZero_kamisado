@@ -18,10 +18,10 @@ batch_learning = True
 batch_size = 64
 
 # Number of training epochs
-epochs = 1000
+epochs = 10
 
 # Number of simulations in Monte Carlo method
-num_simulations = 1000
+num_simulations = 10
 
 # Flag indicating whether validation is enabled
 validate = True

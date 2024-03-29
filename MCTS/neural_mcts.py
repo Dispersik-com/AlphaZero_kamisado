@@ -3,6 +3,7 @@ from collections import deque
 from MCTS.mcts import MonteCarloTreeSearch
 import torch
 import config
+from MCTS.node import MCTSNode
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
@@ -265,4 +266,8 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
     def change_side(self):
         self.player = "White" if self.player == "Black" else "Black"
         self.opponent_player.agent_player.player = "White" if self.player == "Black" else "Black"
+
+        self.reward_by_player *= -1.0
+        self.root = MCTSNode(self.game, is_root=True)
+
 
