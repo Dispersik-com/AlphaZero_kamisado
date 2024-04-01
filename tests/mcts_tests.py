@@ -9,7 +9,7 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
 
     def setUp(self):
         self.game = KamisadoGame()
-        self.mcts = MonteCarloTreeSearch(self.game)
+        self.mcts = MonteCarloTreeSearch(self.game, strategy="Exp3")
 
     def test_simulate(self):
         node = self.mcts.root
@@ -26,7 +26,9 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
         self.mcts = MonteCarloTreeSearch(self.game)
         self.mcts.search(num_simulations=1000)
 
-    def test_save(self):
-        self.mcts.search(num_simulations=100)
-        self.mcts.save_tree('100_iter.json')
+    def test_save_tree(self):
+        self.mcts.search(num_simulations=1000)
+        self.mcts.save_tree('test_tree.json')
+
+
 

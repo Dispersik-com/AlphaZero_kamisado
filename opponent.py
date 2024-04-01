@@ -60,7 +60,7 @@ class MCTSOpponent(Opponent):
         current_node = self.get_current_node()
 
         # Select a child node based on the chosen strategy
-        best_child = current_node.select_child(strategy=self.agent_player.strategy)
+        best_child = current_node.select_child(strategy=self.agent_player.strategy, opponent=True)
 
         if best_child.action in legal_actions:
             return best_child.action

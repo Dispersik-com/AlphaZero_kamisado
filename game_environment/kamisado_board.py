@@ -48,3 +48,8 @@ class KamisadoBoard:
                 else:
                     print(f"e-{cell_color} ", end="")
             print()
+
+    def flip_board(self):
+        # Flip the game board
+        self.game_board = np.flipud(self.game_board)
+        self.color_board = np.flipud(self.color_board)

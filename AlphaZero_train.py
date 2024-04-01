@@ -1,26 +1,11 @@
+import torch
 from tqdm.autonotebook import tqdm
-from MCTS.neural_mcts import NeuralMonteCarloTreeSearch
 from MCTS.mcts import MonteCarloTreeSearch
-from policy_value_networks import PolicyNet, ValueNet
 from game_environment.kamisado_enviroment import KamisadoGame
-import config
-from metrics import *
+from metrics import evaluate_value_accuracy, evaluate_move_quality, plot_metrics
 from opponent import MCTSOpponent
-
-
-def create_agent(game, player="White"):
-
-    policy_net = PolicyNet(learning_rate=config.policy_learning_rate)
-    value_net = ValueNet(learning_rate=config.value_learning_rate)
-
-    neural_mcts = NeuralMonteCarloTreeSearch(game=game,
-                                             player=player,
-                                             policy_network=policy_net,
-                                             value_network=value_net,
-                                             update_form_buffer=config.batch_learning,
-                                             batch_size=config.batch_size)
-
-    return neural_mcts
+import agent
+import config
 
 
 def play_and_train(epochs, num_simulations, num_validations, validate=True):
@@ -29,7 +14,7 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
     game = KamisadoGame()
 
     # create agent
-    agent_player = create_agent(game=game, player="White")
+    agent_player = agent.create_agent(game=game, player="White")
 
     # create opponent for agent
     mcts = MonteCarloTreeSearch(game=game, player="Black",
@@ -67,8 +52,6 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
 
         eval_reward.append(agent_player.total_reward)
 
-        agent_player.change_side()
-
     # Plot metrics
 
     # losses = agent_player.get_losses()
@@ -81,8 +64,8 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
 
     plot_metrics({"Value accuracy": value_accuracy},
                  xlabel="Epochs", ylabel="accuracy", title="Evaluation value accuracy")
-    plot_metrics({"Move quality": policy_accuracy},
-                 xlabel="Epochs", ylabel="accuracy", title="Evaluation move quality")
+    # plot_metrics({"Move quality": policy_accuracy},
+    #              xlabel="Epochs", ylabel="accuracy", title="Evaluation move quality")
 
     if config.save_models:
         agent_player.policy_network.save_model(config.policy_save_filename)
@@ -91,9 +74,9 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
 
 if __name__ == "__main__":
     play_and_train(epochs=config.epochs,
-                        num_simulations=config.num_simulations,
-                        num_validations=config.num_validations,
-                        validate=config.validate)
+                   num_simulations=config.num_simulations,
+                   num_validations=config.num_validations,
+                   validate=config.validate)
 
     if config.device == "cuda":
         torch.cuda.empty_cache()

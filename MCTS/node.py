@@ -31,12 +31,14 @@ class MCTSNode:
         """
         return not bool(self.untried_actions)
 
-    def select_child(self, exploration_weight=1.0, strategy="UCB1"):
+    def select_child(self, exploration_weight=1.0, strategy="UCB1", opponent=False):
         """
         Select a child node based on a selection strategy (e.g., UCB1).
 
         Args:
             exploration_weight: The weight for exploration in the selection strategy.
+            strategy: The selection strategy to use.
+            opponent: Flag indicating whether the node is being selected by the opponent.
 
         Returns:
             The selected child node.
@@ -62,14 +64,13 @@ class MCTSNode:
                                                 exploration_weight / len(self.children))
 
         elif strategy == "ThompsonSampling":
-            sampled_values = [random.betavariate(child.value + 1, child.visits - child.value + 1) for child in
-                              self.children]
-            selected_child_index = sampled_values.index(max(sampled_values))
-            selected_child = self.children[selected_child_index]
-            return selected_child
+            selection_function = lambda child: random.betavariate(child.value + 1, child.visits - child.value + 1)
 
         else:
             raise ValueError("Invalid strategy specified")
+
+        if opponent:
+            return min(filtered_children, key=selection_function)
 
         selected_child = max(filtered_children, key=selection_function)
 

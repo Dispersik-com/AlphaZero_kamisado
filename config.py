@@ -18,10 +18,10 @@ batch_learning = True
 batch_size = 64
 
 # Number of training epochs
-epochs = 10
+epochs = 100
 
 # Number of simulations in Monte Carlo method
-num_simulations = 10
+num_simulations = 1000
 
 # Flag indicating whether validation is enabled
 validate = True
@@ -30,7 +30,7 @@ validate = True
 num_validations = 100
 
 # Flag save models
-save_models = False
+save_models = True
 
 # Model`s name
 policy_save_filename = "policy_model.pth"
@@ -40,5 +40,5 @@ value_save_filename = "value_model.pth"
 """ Opponent settings """
 
 # Strategy for the opponent
-opponent_strategy = "UCB1-Tuned"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
+opponent_strategy = "Epx3"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
 

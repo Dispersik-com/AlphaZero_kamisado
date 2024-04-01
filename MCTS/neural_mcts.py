@@ -3,7 +3,6 @@ from collections import deque
 from MCTS.mcts import MonteCarloTreeSearch
 import torch
 import config
-from MCTS.node import MCTSNode
 
 
 class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
@@ -220,7 +219,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         return validation_data
 
     @staticmethod
-    def convert_node_to_input(node):
+    def convert_node_to_input(node, invert=False):
         """
         Convert the node to a format suitable for input to the neural network.
 
@@ -240,7 +239,13 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         for i, row in enumerate(state):
             for j, cell in enumerate(row):
                 if str(cell) in piece_to_idx.keys():
-                    state[i][j] = piece_to_idx[str(cell)]
+                    temp_cell = str(cell)
+                    if invert:
+                        if temp_cell[0] == "W":
+                            temp_cell = "B-" + temp_cell[2]
+                        else:
+                            temp_cell = "W-" + temp_cell[2]
+                    state[i][j] = piece_to_idx[temp_cell]
 
         # create tensor
         tensor = torch.tensor(state, dtype=torch.float32, requires_grad=True, device=config.device).view(-1).detach()
@@ -263,11 +268,5 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
         return win_rate
 
-    def change_side(self):
-        self.player = "White" if self.player == "Black" else "Black"
-        self.opponent_player.agent_player.player = "White" if self.player == "Black" else "Black"
-
-        self.reward_by_player *= -1.0
-        self.root = MCTSNode(self.game, is_root=True)
 
 
