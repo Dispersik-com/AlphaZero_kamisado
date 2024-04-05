@@ -1,4 +1,5 @@
 import torch
+import config
 
 
 class SaveLoadInterface:
@@ -24,7 +25,7 @@ class SaveLoadInterface:
             PolicyNet: The loaded model.
         """
         model = cls()
-        model.load_state_dict(torch.load(file_path))
+        model.load_state_dict(torch.load(file_path, map_location=torch.device(config.device)))
         model.eval()  # Set the model to evaluation mode
         return model
 

@@ -4,7 +4,7 @@ from MCTS.mcts import MonteCarloTreeSearch
 from game_environment.kamisado_enviroment import KamisadoGame
 from metrics import evaluate_value_accuracy, evaluate_move_quality, plot_metrics
 from opponent import MCTSOpponent
-import agent
+from agent import Agent
 import config
 
 
@@ -14,7 +14,7 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
     game = KamisadoGame()
 
     # create agent
-    agent_player = agent.create_agent(game=game, player="White")
+    agent_player = Agent(game=game, player="White")
 
     # create opponent for agent
     mcts = MonteCarloTreeSearch(game=game, player="Black",
