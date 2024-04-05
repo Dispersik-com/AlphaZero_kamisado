@@ -1,6 +1,7 @@
 from collections import deque
 import numpy as np
 import json
+from MCTS.node import MCTSNode
 from game_environment.kamisado_enviroment import KamisadoGame
 from game_environment.pieces import Monk
 
@@ -37,6 +38,7 @@ class TreeSerializationMixin:
                 'children': list(map(lambda x: str(hash(x.state)), children_data)),
                 'visits': current_node.visits,
                 'value': current_node.value,
+                'last_move': current_node.state.last_move,
                 'untried_actions': str(current_node.untried_actions),
                 'history_of_moves': array_to_str_list(current_node.state.history_of_moves),
             }
@@ -45,10 +47,36 @@ class TreeSerializationMixin:
 
         return tree_data
 
-    # def from_dict(self, dict_data):
-    #     for _, data in dict_data.items():
-    #         game = KamisadoEnvironment()
-    #         game.game_board = self.str_list_to_game_board(data["state"])
+    def from_dict(self, dict_data):
+        def add_node(data):
+            game = KamisadoGame()
+            game.game_board = self.str_list_to_game_board(data["state"])
+            value = int(data["value"])
+            visits = int(data["visits"])
+            action = data["action"]
+            game.last_move = data["last_move"]
+
+            node = MCTSNode(game, action=action)
+            node.visits = visits
+            node.value = value
+            return node
+
+        created_nodes = {}
+        all_keys = list(dict_data.keys())
+
+        for data_key in all_keys:
+            created_nodes[data_key] = add_node(dict_data[data_key])
+
+        for data_key in all_keys:
+            current_node = created_nodes[data_key]
+            children_keys = dict_data[data_key]["children"]
+            for child_key in children_keys:
+                child_node = created_nodes[child_key]
+                current_node.children.append(child_node)
+
+        root_key = all_keys[0]
+
+        return created_nodes[root_key]
 
     def save_tree(self, filename, indent=3):
         """
@@ -62,7 +90,7 @@ class TreeSerializationMixin:
         with open(f"{filename}", 'w') as file:
             json.dump(tree_data, file, indent=indent)
 
-    def load_tree(self, filename):
+    def load_tree(self, filename, reload_tree=True):
         """
         Load the MCTS tree from a file.
 
@@ -74,6 +102,9 @@ class TreeSerializationMixin:
         """
         with open(filename, 'r') as file:
             tree_data = json.load(file)
+
+        if reload_tree:
+            self.root = self.from_dict(tree_data)
         return tree_data
 
     @staticmethod

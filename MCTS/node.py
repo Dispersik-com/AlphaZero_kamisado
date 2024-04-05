@@ -29,7 +29,7 @@ class MCTSNode:
         Returns:
             True if fully expanded, False otherwise.
         """
-        return not bool(self.untried_actions)
+        return not bool(self.untried_actions) or bool(self.get_legal_actions())
 
     def select_child(self, exploration_weight=1.0, strategy="UCB1", opponent=False):
         """
@@ -97,6 +97,7 @@ class MCTSNode:
 
             # Choose one of the untried actions that has not been used in this node yet
             action = list(set(self.untried_actions) & set(legal_moves_by_piece)).pop()
+
             # Remove the chosen action from the list of untried actions
             self.untried_actions.pop(self.untried_actions.index(action))
 

@@ -35,11 +35,10 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
 
         for i in range(num_simulations):
 
-            self.root_random_move(random_first_piece=random_first_piece,
-                                  piece_index=i)
-
-            # step 1: select
-            selected_node = self.select(self.root)
+            # step 1: select first node
+            selected_node = self.root_random_move(random_first_piece=random_first_piece,
+                                                  piece_index=i)
+            # selected_node = self.select(self.root)
 
             # step 2: expanding
             if not selected_node.is_terminal():
@@ -52,20 +51,22 @@ class MonteCarloTreeSearch(TreeSerializationMixin):
                 # step 4: backpropagation
                 self.backpropagation(last_node, reward)
 
-        # select the best action based on root statistics
-        best_action = self.get_best_action(self.root)
-
-        return best_action
+        self.root.state.last_move = None
+        # # select the best action based on root statistics
+        # best_action = self.get_best_action(self.root)
+        #
+        # return best_action
 
     def root_random_move(self, random_first_piece, piece_index=0):
-        if self.root.state.last_move is None:
-            if random_first_piece:
-                self.root.state.set_first_piece()
-            else:
-                piece_color = self.game.color_dict[piece_index]
-                self.root.state.set_first_piece(piece_color)
+        if random_first_piece:
+            self.root.state.set_first_piece()
+        else:
+            piece_color = self.game.color_dict[piece_index%8]
+            self.root.state.set_first_piece(piece_color)
 
-            self.root.action = self.root.state.last_move[0]
+        self.root.action = self.root.state.last_move[0]
+        action = random.choice(self.root.get_legal_actions())
+        return self.root.expand(action=action)
 
     def simulate(self, node):
         """

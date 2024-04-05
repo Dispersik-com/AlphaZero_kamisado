@@ -33,7 +33,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
     def set_opponent(self, opponent):
         self.opponent_player = opponent
 
-    def neural_network_select(self, input_data, legal_actions):
+    def neural_network_select(self, input_data, legal_actions, get_all_probs=False):
 
         # get move probabilities from the policy_network
         action_probs = self.policy_network(input_data)
@@ -45,6 +45,10 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         # choose a move according to the probabilities
         action_index = torch.argmax(action_probs_by_legal_moves).item()
         selected_action = self.policy_network.action_labels[action_index]
+
+        if get_all_probs:
+            return action_probs_by_legal_moves
+
         return selected_action
 
     def simulate(self, node):
@@ -70,7 +74,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
             # evaluate move probabilities using the policy_network
             # Prepare available moves in a suitable format for the neural network
-            input_data = self.convert_node_to_input(current_node)
+            input_data = self.convert_state_to_input(current_node.state.game_board)
 
             if self.opponent_player is not None and self.player != current_node.state.current_player:
                 self.opponent_player.set_current_node(current_node)
@@ -197,7 +201,7 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             # Collecting data for model validation
             while queue and current_node.get_legal_actions():
 
-                input_data = self.convert_node_to_input(current_node)
+                input_data = self.convert_state_to_input(current_node.state.game_board)
 
                 with torch.no_grad():
                     output_value = self.value_network(input_data.detach().clone())
@@ -219,17 +223,17 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         return validation_data
 
     @staticmethod
-    def convert_node_to_input(node, invert=False):
+    def convert_state_to_input(state, invert=False):
         """
         Convert the node to a format suitable for input to the neural network.
 
         Args:
-            node: The MCTS node.
+            state: The game board.
 
         Returns:
             Input data for the neural network.
         """
-        state = node.state.game_board.tolist()
+        state = state.tolist()
 
         piece_to_idx = {'B-O': 1, 'B-A': 2, 'B-V': 3, 'B-P': 4,
                         'B-Y': 5, 'B-R': 6, 'B-G': 7, 'B-B': 8,
