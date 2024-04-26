@@ -13,9 +13,9 @@ class Network(ABC, nn.Module):
         Initializes the ValueNetLSTM model.
         """
         super(Network, self).__init__()
-        self.rnn = nn.LSTM(input_size=64, hidden_size=128, num_layers=1, batch_first=True)
-        self.fc1 = nn.Linear(128, 256)
-        self.fc2 = nn.Linear(256, num_outputs)
+        self.rnn = nn.LSTM(input_size=64, hidden_size=128, num_layers=1, batch_first=True).to(config.device)
+        self.fc1 = nn.Linear(128, 256).to(config.device)
+        self.fc2 = nn.Linear(256, num_outputs).to(config.device)
         self.learning_rate = learning_rate
 
         self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -85,7 +85,7 @@ class PolicyNet(Network):
             out: Output tensor.
         """
         # LSTM layer
-        x, _ = self.rnn(x)
+        x, _ = self.rnn(x.to(config.device))
 
         # Last time step output of LSTM
         x = x[:, -1]
@@ -145,7 +145,7 @@ class ValueNet(Network):
             out: Output tensor.
         """
         # LSTM layer
-        x, _ = self.rnn(x)
+        x, _ = self.rnn(x.to(config.device))
 
         # Last time step output of LSTM
         x = x[:, -1]
