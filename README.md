@@ -31,15 +31,6 @@ The *"AlphaZero Kamisado"* project is an implementation of the AlphaZero algorit
 - **AlphaZero_train.py**: The main script for training the AlphaZero model for playing Kamisado.
 - **config.py**: Module with configuration parameters for training and running the project.
 
-### Training Results:
-
-Agent vs UCB1:
-- epochs: 500.
-- simulation: 1 000.
-- Games Played: 500 000.
-
-**Win Rate:**
-![win_rate](https://github.com/Dispersik-com/AlphaZero_kamisado/blob/main/research_results/net_train_result/vs%20UCB1-Tuned/Win%20Rate.png)
 
 
 

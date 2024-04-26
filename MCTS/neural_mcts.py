@@ -19,11 +19,8 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         self.update_form_buffer = update_form_buffer
 
         self.batch_size = batch_size
-        self.buffer = {
-                       "states_data": [],
-                       "selected_action_data": [],
-                       "node_value_data": []
-                       }
+        self.buffer = []
+        self.game_sequence = []
 
         # metrics
         self.win_rate = {"Black": 0, "White": 0}
@@ -33,10 +30,16 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
     def set_opponent(self, opponent):
         self.opponent_player = opponent
 
-    def neural_network_select(self, input_data, legal_actions, get_all_probs=False):
+    def get_input_sequence(self):
+        input_tensors = torch.stack(self.game_sequence)
+        return input_tensors.view(1, len(self.game_sequence), 64).clone()
+
+    def neural_network_select(self, legal_actions, get_all_probs=False):
+
+        input_tensors = self.get_input_sequence()
 
         # get move probabilities from the policy_network
-        action_probs = self.policy_network(input_data)
+        action_probs = self.policy_network(input_tensors)
 
         # apply mask by legal moves
         mask = self.policy_network.create_mask(legal_actions)
@@ -61,12 +64,20 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         Returns:
             The reward of the simulation.
         """
+        self.game_sequence = []
+
+        data = {
+            "outputs_data": [],
+            "best_action_data": [],
+            "outputs_value_data": [],
+            "node_value_data": [],
+        }
+
         current_node = node
 
         while not current_node.is_terminal():
 
             legal_actions = current_node.get_legal_actions()
-
             if not legal_actions:
                 if not current_node.state.pass_move():
                     break
@@ -75,23 +86,29 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
             # evaluate move probabilities using the policy_network
             # Prepare available moves in a suitable format for the neural network
             input_data = self.convert_state_to_input(current_node.state.game_board)
+            self.game_sequence.append(input_data)
 
             if self.opponent_player is not None and self.player != current_node.state.current_player:
                 self.opponent_player.set_current_node(current_node)
                 selected_action = self.opponent_player.select_move(legal_actions)
             else:
-                selected_action = self.neural_network_select(input_data, legal_actions)
+                selected_action = self.neural_network_select(legal_actions)
 
-            # add data to buffer
+            # add data
 
-            self.buffer["states_data"].append(input_data)
-            self.buffer["selected_action_data"].append(selected_action)
+            data["outputs_data"].append(selected_action)
+            best_action = current_node.parent.select_child().action
+            data["best_action_data"].append(best_action)
 
             # get real value data and normalized
             normalized_node_value = torch.tanh(torch.tensor(current_node.value, device=config.device))
-            self.buffer["node_value_data"].append(normalized_node_value)
+            data["node_value_data"].append(normalized_node_value)
+            data["outputs_value_data"].append(self.value_network(self.get_input_sequence()))
 
             current_node = current_node.expand(action=selected_action)
+
+        # add data to buffer
+        self.buffer.append(data)
 
         # format reward by player
         if current_node.is_winner("Black"):
@@ -111,46 +128,28 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
         self.value_network.train()
         self.policy_network.train()
 
-        if self.update_form_buffer:
-            shift = 0
-            while True:
-                states = self.buffer["states_data"][shift:self.batch_size + shift]
-                selected_actions = self.buffer["selected_action_data"][shift:self.batch_size + shift]
-                node_values = self.buffer["node_value_data"][shift:self.batch_size + shift]
+        shift = 0
+        while True:
+            data = self.buffer.pop(0)
+            outputs = data["outputs_data"]
+            targets = data["best_action_data"]
+            outputs_values = data["outputs_value_data"]
+            node_values = data["node_value_data"]
 
-                if len(states) == 0:
-                    break
+            if self.buffer:
+                break
 
-                values = []
-                for s in states:
-                    values.append(self.value_network(s))
+            loss = self.value_network.batch_update(outputs_values, node_values)
+            self.losses["value_losses"].append(loss.item())
 
-                loss = self.value_network.batch_update(values, node_values)
-                self.losses["value_losses"].append(loss.item())
+            # Update the policy network
+            loss = self.policy_network.batch_update(outputs, targets, node_values)
+            self.losses["policy_losses"].append(loss.item())
 
-                # Update the policy network
-                loss = self.policy_network.batch_update(states, selected_actions, node_values)
-                self.losses["policy_losses"].append(loss.item())
-
-                shift += self.batch_size
-
-        else:
-            for i in range(len(self.buffer["states_data"])):
-
-                state = self.buffer["states_data"][i]
-                selected_action = self.buffer["selected_action_data"][i]
-                node_value = self.buffer["node_value_data"][i]
-
-                value = self.value_network(state)
-                loss = self.value_network.update(value, node_value)
-                self.losses["value_losses"].append(loss.item())
-
-                # Update the policy network
-                loss = self.policy_network.update(state, selected_action, node_value)
-                self.losses["policy_losses"].append(loss.item())
+            shift += self.batch_size
 
         # clean buffer
-        self.buffer = {"states_data": [], "selected_action_data": [], "node_value_data": []}
+        self.buffer = []
 
     def get_losses(self, reset_losses=False):
         losses = self.losses
@@ -198,11 +197,13 @@ class NeuralMonteCarloTreeSearch(MonteCarloTreeSearch):
 
             current_node = self.root
 
+            sequence = []
             # Collecting data for model validation
             while queue and current_node.get_legal_actions():
 
                 input_data = self.convert_state_to_input(current_node.state.game_board)
-
+                sequence.append(input_data)
+                input_data = torch.stack(sequence).view(1, len(sequence), 64)
                 with torch.no_grad():
                     output_value = self.value_network(input_data.detach().clone())
                     output_policy = self.policy_network(input_data.detach().clone())

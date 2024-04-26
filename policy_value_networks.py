@@ -3,110 +3,26 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 import config
-import net_utils
+from abc import ABC, abstractmethod
 
 
-class PolicyNet(nn.Module, net_utils.SaveLoadInterface):
-    """
-    A neural network model for policy estimation in a game.
+class Network(ABC, nn.Module):
 
-    Attributes:
-        conv1: First convolutional layer.
-        conv2: Second convolutional layer.
-        fc1: First fully connected layer.
-        fc2: Second fully connected layer.
-    """
-    def __init__(self, learning_rate=0.001):
+    def __init__(self, num_outputs=1, learning_rate=0.001):
         """
-        Initializes the PolicyNet model.
+        Initializes the ValueNetLSTM model.
         """
-        super(PolicyNet, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1).to(config.device)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1).to(config.device)
-        self.fc1 = nn.Linear(64 * 8 * 8, 256).to(config.device)
-        self.fc2 = nn.Linear(256, 64).to(config.device)
+        super(Network, self).__init__()
+        self.rnn = nn.LSTM(input_size=64, hidden_size=128, num_layers=1, batch_first=True)
+        self.fc1 = nn.Linear(128, 256)
+        self.fc2 = nn.Linear(256, num_outputs)
         self.learning_rate = learning_rate
-
-        # set labels for output
-        size = 8
-        self.action_labels = [(x // size, x % size) for x in range(size*size)]
 
         self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
+    @abstractmethod
     def forward(self, x):
-        """
-        Forward pass of the PolicyNet model.
-
-        Args:
-            x: Input tensor.
-
-        Returns:
-            policy: Output tensor representing the policy.
-        """
-
-        x = x.view(1, 1, 8, 8)
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        x = x.view(-1, 64 * 8 * 8)
-        x = torch.relu(self.fc1(x))
-        policy = torch.softmax(self.fc2(x), dim=1)
-
-        return policy
-
-    def update(self, output, target, reward: float):
-        """
-        Update the parameters of the policy network using an optimizer.
-
-        Args:
-            reward: reward of moves
-            output: The output of the policy network.
-            target: The target labels for the output.
-
-        Returns:
-            None
-        """
-        target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long, device=config.device)
-
-        reward = torch.tensor(float(reward), requires_grad=True, device=config.device)
-
-        loss = F.cross_entropy(output, target_class) * reward
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss
-
-    def batch_update(self, outputs, targets, reward: float):
-        """
-            Update the parameters of the policy network using an optimizer.
-
-            Args:
-                reward: List of rewards for moves.
-                outputs: List of outputs of the policy network.
-                targets: List of target labels for the outputs.
-
-            Returns:
-                losses
-            """
-
-        # Convert lists to tensors
-        outputs_tensor = torch.stack(outputs).to(config.device)
-        rewards_tensor = torch.tensor(reward, requires_grad=True, device=config.device)
-
-        targets_tensor = []
-        for target in targets:
-            target_class = torch.tensor(self.action_labels.index(target), dtype=torch.long, device=config.device)
-            targets_tensor.append(target_class)
-        one_hot_targets = torch.stack(targets_tensor).to(config.device)
-
-        # Compute loss
-        total_loss = torch.mean(F.cross_entropy(outputs_tensor, one_hot_targets) * rewards_tensor)
-
-        # Perform backward pass and optimization step
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        self.optimizer.step()
-
-        return total_loss
+        pass
 
     def create_mask(self, valid_actions):
         """
@@ -123,84 +39,122 @@ class PolicyNet(nn.Module, net_utils.SaveLoadInterface):
         mask[indices_valid_actions] = 1
         return mask
 
-    def get_one_hot_target(self, target: tuple):
+    def save_model(self, file_path):
         """
-        Generates a one-hot representation for a given target action.
+        Saves the model parameters to a file.
 
         Args:
-            target (tuple): A tuple representing the coordinates of the target action.
+            file_path (str): The path to the file where the model parameters will be saved.
+        """
+        torch.save(self.state_dict(), file_path)
+
+    @classmethod
+    def load_model(cls, file_path):
+        """
+        Creates a new instance of the model and loads parameters from a file.
+
+        Args:
+            file_path (str): The path to the file from which the model parameters will be loaded.
 
         Returns:
-            torch.Tensor: A one-dimensional tensor representing the one-hot encoding of the target action.
+            PolicyNet: The loaded model.
         """
-        num_classes = len(self.action_labels)
-
-        one_hot_label = torch.zeros(num_classes, device=config.device)
-        action_index = self.action_labels.index(target)
-        one_hot_label[action_index] = 1
-
-        return one_hot_label
+        model = cls()
+        model.load_state_dict(torch.load(file_path, map_location=torch.device(config.device)))
+        model.eval()  # Set the model to evaluation mode
+        return model
 
 
-class ValueNet(nn.Module, net_utils.SaveLoadInterface):
-    """
-    A neural network model for estimating the value of a game state.
+class PolicyNet(Network):
 
-    Attributes:
-        conv1: First convolutional layer.
-        conv2: Second convolutional layer.
-        fc1: First fully connected layer.
-        fc2: Second fully connected layer.
-    """
     def __init__(self, learning_rate=0.001):
-        """
-        Initializes the ValueNet model.
-        """
-        super(ValueNet, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1).to(config.device)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1).to(config.device)
-        self.fc1 = nn.Linear(64 * 8 * 8, 256).to(config.device).to(config.device)
-        self.fc2 = nn.Linear(256, 1).to(config.device).to(config.device)    # output for state value
+        super().__init__(num_outputs=64, learning_rate=learning_rate)
 
-        self.learning_rate = learning_rate
-
-        self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        # set labels for output
+        size = 8
+        self.action_labels = [(x // size, x % size) for x in range(size * size)]
 
     def forward(self, x):
         """
-        Forward pass of the ValueNet model.
+        Forward pass of the network.
 
         Args:
             x: Input tensor.
 
         Returns:
-            value: Output tensor representing the estimated value of the state.
+            out: Output tensor.
         """
-        x = x.view(1, 1, 8, 8)
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        x = x.view(-1, 64 * 8 * 8)
-        x = torch.relu(self.fc1(x))
-        value = torch.tanh(self.fc2(x))  # output for state value, in range [-1, 1]
-        return value
+        # LSTM layer
+        x, _ = self.rnn(x)
 
-    def update(self, output, reward: float):
+        # Last time step output of LSTM
+        x = x[:, -1]
+
+        # Fully connected layers
+        x = F.relu(self.fc1(x))
+        x = x.view(-1, 256)
+        policy = F.softmax(self.fc2(x), dim=1)
+        return policy
+
+    def batch_update(self, outputs, targets, reward: float):
         """
-        Update the parameters of the value network using an optimizer.
+            Update the parameters of the policy network using an optimizer.
+
+            Args:
+                reward: List of rewards for moves.
+                outputs: List of outputs of the policy network.
+                targets: List of target labels for the outputs.
+
+            Returns:
+                losses
+            """
+
+        # Convert lists to tensors
+        outputs_tensor = torch.stack(tuple(outputs), dim=0).to(config.device)
+        rewards_tensor = torch.tensor(reward, requires_grad=True, device=config.device)
+
+        # Create tensor for target labels
+        target_indices = [torch.tensor(self.action_labels.index(target), dtype=torch.long) for target in targets]
+        target_tensor = torch.tensor(target_indices, dtype=torch.long, device=config.device)
+        one_hot_tensors = F.one_hot(target_tensor, num_classes=len(self.action_labels)).to(config.device)
+
+        # Compute loss
+        total_loss = torch.mean(F.cross_entropy(outputs_tensor.squeeze(1), one_hot_tensors.float()) * rewards_tensor)
+
+        # Perform backward pass and optimization step
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        self.optimizer.step()
+
+        return total_loss
+
+
+class ValueNet(Network):
+
+    def __init__(self, learning_rate=0.001):
+        super().__init__(num_outputs=1, learning_rate=learning_rate)
+
+    def forward(self, x):
+        """
+        Forward pass of the network.
 
         Args:
-            reward: reward of moves
-            output: The output of the value network.
+            x: Input tensor.
 
         Returns:
-            lose
+            out: Output tensor.
         """
-        reward_tensor = torch.tensor(float(reward), requires_grad=True, device=config.device).view(1, 1)
-        loss = F.mse_loss(output, reward_tensor)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss
+        # LSTM layer
+        x, _ = self.rnn(x)
+
+        # Last time step output of LSTM
+        x = x[:, -1]
+
+        # Fully connected layers
+        x = F.relu(self.fc1(x))
+        x = x.view(-1, 256)
+        value = F.sigmoid(self.fc2(x))
+        return value
 
     def batch_update(self, outputs, rewards):
         """
@@ -211,15 +165,15 @@ class ValueNet(nn.Module, net_utils.SaveLoadInterface):
             rewards: List of rewards for moves.
 
         Returns:
-            losses
+            loss
         """
 
         # Convert lists to tensors
         outputs_tensor = torch.stack(outputs).squeeze(1).to(config.device)
-        rewards_tensor = torch.stack(rewards).unsqueeze(1).to(config.device)
+        rewards_tensor = torch.tensor(rewards, requires_grad=True).view(-1, 1).to(config.device)
 
         # Compute loss
-        total_loss = torch.mean(F.mse_loss(outputs_tensor, rewards_tensor))
+        total_loss = F.mse_loss(outputs_tensor, rewards_tensor)
 
         # Perform backward pass and optimization step
         self.optimizer.zero_grad()
@@ -227,4 +181,3 @@ class ValueNet(nn.Module, net_utils.SaveLoadInterface):
         self.optimizer.step()
 
         return total_loss
-

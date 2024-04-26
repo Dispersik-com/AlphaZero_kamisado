@@ -7,7 +7,7 @@ import config
 matplotlib.use(config.plot_backend)
 
 
-def plot_metrics(metrics, xlabel="", ylabel="", title="", legend=True, save=False):
+def plot_metrics(metrics, xlabel="", ylabel="", title="", legend=True, save=config.save_plot):
     """
     Plot metrics.
 

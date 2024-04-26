@@ -27,7 +27,7 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
         self.mcts.search(num_simulations=1000)
 
     def test_save_tree(self):
-        self.mcts.search(num_simulations=100)
+        self.mcts.search(num_simulations=100_000)
         self.mcts.save_tree('test_tree.json')
 
     def test_load_tree(self):

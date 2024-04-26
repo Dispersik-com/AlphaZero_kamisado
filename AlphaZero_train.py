@@ -64,8 +64,8 @@ def play_and_train(epochs, num_simulations, num_validations, validate=True):
 
     plot_metrics({"Value accuracy": value_accuracy},
                  xlabel="Epochs", ylabel="accuracy", title="Evaluation value accuracy")
-    # plot_metrics({"Move quality": policy_accuracy},
-    #              xlabel="Epochs", ylabel="accuracy", title="Evaluation move quality")
+    plot_metrics({"Move quality": policy_accuracy},
+                 xlabel="Epochs", ylabel="accuracy", title="Evaluation move quality")
 
     if config.save_models:
         agent_player.policy_network.save_model(config.policy_save_filename)

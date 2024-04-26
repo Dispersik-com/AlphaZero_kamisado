@@ -2,6 +2,8 @@ import torch
 
 plot_backend = "TkAgg"
 
+save_plot = False
+
 # set cuda if is available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -21,7 +23,7 @@ batch_size = 64
 epochs = 100
 
 # Number of simulations in Monte Carlo method
-num_simulations = 1000
+num_simulations = 100
 
 # Flag indicating whether validation is enabled
 validate = True
@@ -40,5 +42,5 @@ value_save_filename = "value_model.pth"
 """ Opponent settings """
 
 # Strategy for the opponent
-opponent_strategy = "Epx3"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
+opponent_strategy = "UCB1"  # Available strategies: UCB1, UCB1-Tuned, Epx3, ThompsonSampling
 

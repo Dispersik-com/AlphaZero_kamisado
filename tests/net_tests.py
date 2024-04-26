@@ -1,37 +1,16 @@
 import unittest
+import random
 import torch
-from torch import optim
-import torch.nn.functional as F
-
-from policy_value_networks import PolicyNet, ValueNet
 import config
+from policy_value_networks import PolicyNet, ValueNet
 
 
-class TestPolicyNet(unittest.TestCase):
+class TestModels(unittest.TestCase):
+
     def setUp(self):
         self.policy_net = PolicyNet()
-        self.input_data = torch.randn(1, 1, 8, 8)  # Example input data
-
-    def test_forward_pass(self):
-        output = self.policy_net(self.input_data)
-        self.assertEqual(list(output.shape), [1, 64])  # Check output shape
-
-    def test_softmax_by_legal_moves(self):
-        input_tensor = torch.randn(64, device=config.device)  # Example output tensor
-        outputs = self.policy_net(input_tensor)
-        mask = self.policy_net.create_mask(self.policy_net.action_labels[7:57])
-        masked_outputs = outputs * mask.float()
-        self.assertAlmostEqual(masked_outputs.sum().item(), 1.0 - 0.16,  delta=0.1)  # Check if probabilities sum by
-
-    def test_get_one_hot(self):
-        result = self.policy_net.get_one_hot_target((1, 1))
-        correct_tensor = torch.zeros(64, device=config.device)
-        correct_tensor[9] = 1.
-
-        self.assertTrue(torch.allclose(result, correct_tensor))
-
-    def test_update(self):
-        input_tensor = torch.tensor([1., 2., 3., 4., 5., 6., 7., 8.,
+        self.value_net = ValueNet()
+        self.input_tensor = torch.tensor([1., 2., 3., 4., 5., 6., 7., 8.,
                                      0., 0., 0., 0., 0., 0., 0., 0.,
                                      0., 0., 0., 0., 0., 0., 0., 0.,
                                      0., 0., 0., 0., 0., 0., 0., 0.,
@@ -41,42 +20,60 @@ class TestPolicyNet(unittest.TestCase):
                                      9., 10., 11., 12., 13., 14., 15., 16.], requires_grad=True,
                                     device=config.device)
 
-        output_tensor = self.policy_net(input_tensor)
-        target = (1, 1)
-        reward = 1.
+    def test_policy_net_forward(self):
+        input_data = torch.randn(1, 10, 64)
+        print(input_data.size())
+        output = self.policy_net(input_data)
+        self.assertEqual(output.size(), (1, 64))
+        self.assertTrue(torch.all(output >= 0) and torch.all(output <= 1))
 
-        self.policy_net.update(output_tensor, target, reward)
+    def test_value_net_forward(self):
+        input_data = torch.randn(1, 10, 64)
+        output = self.value_net(input_data)
+        self.assertEqual(output.size(), (1, 1))
+        self.assertTrue(torch.all(output >= 0) and torch.all(output <= 1))
 
-        for parm in self.policy_net.parameters():
-            self.assertNotEqual(parm.grad, None)
+    def test_policy_net_batch_update(self):
+        time_len = 10
+        outputs = []
+        targets = []
+        rewards = []
+        input_tensors = []
+        for _ in range(time_len):
+            input_tensors.append(self.input_tensor.clone())
+            time_seq = torch.stack(input_tensors).clone().view(1, len(input_tensors), 64)
+            outputs.append(self.policy_net(time_seq))
+            targets.append(random.choice(self.policy_net.action_labels))
+            rewards.append(random.random())
 
+        loss = self.policy_net.batch_update(outputs, targets, rewards)
 
-class TestValueNet(unittest.TestCase):
-    def setUp(self):
-        self.value_net = ValueNet()
-        self.input_data = torch.randn(1, 1, 8, 8)  # Example input data
+        self.assertIsNotNone(loss)
+        self.assertFalse(torch.isnan(loss))
 
-    def test_forward_pass(self):
-        output = self.value_net(self.input_data)
-        self.assertEqual(list(output.shape), [1, 1])  # Check output shape
+        for name, param in self.policy_net.named_parameters():
+            self.assertIsNotNone(param.grad)
+            self.assertTrue(torch.sum(param.grad) != 0.0, f"Gradient for parameter {name} is zero")
 
-    def test_update(self):
-        input_tensor = torch.tensor([1., 2., 3., 4., 5., 6., 7., 8.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          0., 0., 0., 0., 0., 0., 0., 0.,
-                                          9., 10., 11., 12., 13., 14., 15., 16.], requires_grad=True,
-                                          device=config.device)
+    def test_value_net_batch_update(self):
+        time_len = 5
+        outputs = []
+        rewards = []
+        input_tensors = []
+        for _ in range(time_len):
+            input_tensors.append(self.input_tensor.clone())
+            time_seq = torch.stack(input_tensors).clone().view(1, len(input_tensors), 64)
+            outputs.append(self.value_net(time_seq))
+            rewards.append(random.random())
 
-        output_tensor = self.value_net(input_tensor)
-        target = 1.0  # Example target value
-        self.value_net.update(output_tensor, target)  # Update network parameters
-        # check gradient is not None
-        for parm in self.value_net.parameters():
-            self.assertNotEqual(parm.grad, None)
+        loss = self.value_net.batch_update(outputs, rewards)
+
+        self.assertIsNotNone(loss)
+        self.assertFalse(torch.isnan(loss))
+
+        for name, param in self.value_net.named_parameters():
+            self.assertIsNotNone(param.grad)
+            self.assertTrue(torch.sum(param.grad) != 0.0, f"Gradient for parameter {name} is zero")
 
 
 if __name__ == '__main__':
